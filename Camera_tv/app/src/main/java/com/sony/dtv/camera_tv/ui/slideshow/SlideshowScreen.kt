@@ -15,7 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -27,10 +29,13 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
+import coil.request.ImageRequest
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
 
 @Composable
@@ -102,18 +107,30 @@ fun SlideshowScreen(
 
             // 画像表示
             else -> {
-                // 画像本体
-                if (uiState.currentImageBytes != null) {
-                    AsyncImage(
-                        model = uiState.currentImageBytes,
-                        contentDescription = "スライドショー画像",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                val context = LocalContext.current
+                // 認証ヘッダ付き ImageRequestを生成。thumbnailUrl 変化時に自動再ロード
+                val imageRequest = remember(uiState.thumbnailUrl, uiState.accessToken) {
+                    ImageRequest.Builder(context)
+                        .data(uiState.thumbnailUrl)
+                        .addHeader("Authorization", "Bearer ${uiState.accessToken}")
+                        .crossfade(true)
+                        .build()
                 }
 
-                // 画像ロード中オーバーレイ
-                if (uiState.isImageLoading) {
+                var painterState by remember(uiState.thumbnailUrl) {
+                    mutableStateOf<AsyncImagePainter.State>(AsyncImagePainter.State.Empty)
+                }
+
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = "スライドショー画像",
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize(),
+                    onState = { painterState = it },
+                )
+
+                // Coil ロード中オーバーレイ
+                if (painterState is AsyncImagePainter.State.Loading) {
                     CircularProgressIndicator(
                         modifier = Modifier.align(Alignment.Center),
                         color = Color.White,

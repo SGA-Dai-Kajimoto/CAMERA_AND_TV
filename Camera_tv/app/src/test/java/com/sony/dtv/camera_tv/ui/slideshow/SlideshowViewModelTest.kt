@@ -26,7 +26,7 @@ class SlideshowViewModelTest {
     private lateinit var vmScope: CoroutineScope
     private lateinit var repository: ImagingEdgeRepository
 
-    private val dummyBytes = byteArrayOf(1, 2, 3)
+    private val dummyBytes = byteArrayOf(1, 2, 3) // unused but kept for reference
     private val contents = listOf(
         Content("c1", "Image 1"),
         Content("c2", "Image 2"),
@@ -37,6 +37,8 @@ class SlideshowViewModelTest {
     fun setup() {
         vmScope = CoroutineScope(dispatcher + Job())
         repository = mockk()
+        coEvery { repository.getBaseUrl() } returns "https://example.com"
+        coEvery { repository.getAccessToken() } returns "test_token"
     }
 
     @After
@@ -54,14 +56,17 @@ class SlideshowViewModelTest {
     @Test
     fun `init loads contents and first image`() {
         coEvery { repository.listContents(any()) } returns Result.success(contents)
-        coEvery { repository.getContentBinary(any(), any()) } returns Result.success(dummyBytes)
 
         val viewModel = createViewModel()
 
         val state = viewModel.uiState.value
         assertEquals(contents, state.contents)
         assertEquals(0, state.currentIndex)
-        assertArrayEquals(dummyBytes, state.currentImageBytes)
+        assertEquals(
+            "https://example.com/api/v1/folders/folder1/contents/c1/resources/thumbnail/binary",
+            state.thumbnailUrl,
+        )
+        assertEquals("test_token", state.accessToken)
         assertFalse(state.isLoading)
     }
 
@@ -81,7 +86,6 @@ class SlideshowViewModelTest {
     @Test
     fun `nextImage advances currentIndex and wraps around`() {
         coEvery { repository.listContents(any()) } returns Result.success(contents)
-        coEvery { repository.getContentBinary(any(), any()) } returns Result.success(dummyBytes)
 
         val viewModel = createViewModel()
         assertEquals(0, viewModel.uiState.value.currentIndex)
@@ -102,7 +106,6 @@ class SlideshowViewModelTest {
     @Test
     fun `prevImage decrements currentIndex and wraps around`() {
         coEvery { repository.listContents(any()) } returns Result.success(contents)
-        coEvery { repository.getContentBinary(any(), any()) } returns Result.success(dummyBytes)
 
         val viewModel = createViewModel()
         assertEquals(0, viewModel.uiState.value.currentIndex)
@@ -123,7 +126,6 @@ class SlideshowViewModelTest {
     @Test
     fun `togglePlayPause pauses and resumes slideshow`() {
         coEvery { repository.listContents(any()) } returns Result.success(contents)
-        coEvery { repository.getContentBinary(any(), any()) } returns Result.success(dummyBytes)
 
         val viewModel = createViewModel()
         assertTrue(viewModel.uiState.value.isPlaying)

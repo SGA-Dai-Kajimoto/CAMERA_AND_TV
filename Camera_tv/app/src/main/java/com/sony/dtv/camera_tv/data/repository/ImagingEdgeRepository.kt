@@ -4,6 +4,7 @@ import com.sony.dtv.camera_tv.data.local.TokenPreferences
 import com.sony.dtv.camera_tv.data.model.Content
 import com.sony.dtv.camera_tv.data.model.Folder
 import com.sony.dtv.camera_tv.data.remote.ImagingEdgeApi
+import kotlinx.coroutines.flow.first
 import retrofit2.Response
 
 /**
@@ -63,6 +64,13 @@ class ImagingEdgeRepository(
         response.requireSuccess()
         response.body()!!.bytes()
     }
+
+    // ---------------------------------------------------------------- //
+    // 認証情報（Coil 用）
+    // ---------------------------------------------------------------- //
+
+    suspend fun getBaseUrl(): String = tokenPreferences.baseUrl.first().trimEnd('/')
+    suspend fun getAccessToken(): String = tokenPreferences.accessToken.first()
 
     // ---------------------------------------------------------------- //
     // 内部ユーティリティ

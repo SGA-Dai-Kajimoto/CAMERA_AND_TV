@@ -21,8 +21,8 @@ data class SlideshowUiState(
     val contents: List<Content> = emptyList(),
     val currentIndex: Int = 0,
     val isPlaying: Boolean = true,
-    val currentImageBytes: ByteArray? = null,
-    val isImageLoading: Boolean = false,
+    val thumbnailUrl: String? = null,
+    val accessToken: String = "",
     val error: String? = null,
 )
 
@@ -38,6 +38,7 @@ class SlideshowViewModel(
     val uiState: StateFlow<SlideshowUiState> = _uiState.asStateFlow()
 
     private var autoAdvanceJob: Job? = null
+    private var baseUrl: String = ""
 
     init {
         loadContents()
@@ -48,13 +49,18 @@ class SlideshowViewModel(
             _uiState.update { it.copy(isLoading = true, error = null) }
             repository.listContents(folderId)
                 .onSuccess { contents ->
+                    baseUrl = repository.getBaseUrl()
+                    val accessToken = repository.getAccessToken()
                     _uiState.update {
-                        it.copy(isLoading = false, contents = contents, currentIndex = 0)
+                        it.copy(
+                            isLoading = false,
+                            contents = contents,
+                            currentIndex = 0,
+                            thumbnailUrl = contents.firstOrNull()?.let { c -> thumbnailUrl(c) },
+                            accessToken = accessToken,
+                        )
                     }
-                    if (contents.isNotEmpty()) {
-                        loadCurrentImage()
-                        startAutoAdvance()
-                    }
+                    if (contents.isNotEmpty()) startAutoAdvance()
                 }
                 .onFailure { e ->
                     _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -63,28 +69,30 @@ class SlideshowViewModel(
     }
 
     fun nextImage() {
-        val size = _uiState.value.contents.size
+        val state = _uiState.value
+        val size = state.contents.size
         if (size == 0) return
+        val newIndex = (state.currentIndex + 1) % size
         _uiState.update {
             it.copy(
-                currentIndex = (it.currentIndex + 1) % size,
-                currentImageBytes = null,
+                currentIndex = newIndex,
+                thumbnailUrl = thumbnailUrl(state.contents[newIndex]),
             )
         }
-        loadCurrentImage()
         restartAutoAdvance()
     }
 
     fun prevImage() {
-        val size = _uiState.value.contents.size
+        val state = _uiState.value
+        val size = state.contents.size
         if (size == 0) return
+        val newIndex = (state.currentIndex - 1 + size) % size
         _uiState.update {
             it.copy(
-                currentIndex = (it.currentIndex - 1 + size) % size,
-                currentImageBytes = null,
+                currentIndex = newIndex,
+                thumbnailUrl = thumbnailUrl(state.contents[newIndex]),
             )
         }
-        loadCurrentImage()
         restartAutoAdvance()
     }
 
@@ -102,21 +110,8 @@ class SlideshowViewModel(
     // Private helpers
     // ---------------------------------------------------------------- //
 
-    private fun loadCurrentImage() {
-        val state = _uiState.value
-        if (state.contents.isEmpty()) return
-        val content = state.contents[state.currentIndex]
-        scope.launch {
-            _uiState.update { it.copy(isImageLoading = true) }
-            repository.getContentBinary(folderId, content.contentId)
-                .onSuccess { bytes ->
-                    _uiState.update { it.copy(isImageLoading = false, currentImageBytes = bytes) }
-                }
-                .onFailure { e ->
-                    _uiState.update { it.copy(isImageLoading = false, error = e.message) }
-                }
-        }
-    }
+    private fun thumbnailUrl(content: Content): String =
+        "$baseUrl/api/v1/folders/$folderId/contents/${content.contentId}/resources/thumbnail/binary"
 
     private fun startAutoAdvance() {
         cancelAutoAdvance()
@@ -126,8 +121,12 @@ class SlideshowViewModel(
                 val state = _uiState.value
                 if (state.isPlaying && state.contents.isNotEmpty()) {
                     val newIndex = (state.currentIndex + 1) % state.contents.size
-                    _uiState.update { it.copy(currentIndex = newIndex, currentImageBytes = null) }
-                    loadCurrentImage()
+                    _uiState.update {
+                        it.copy(
+                            currentIndex = newIndex,
+                            thumbnailUrl = thumbnailUrl(state.contents[newIndex]),
+                        )
+                    }
                 }
             }
         }
