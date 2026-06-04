@@ -54,6 +54,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // local.properties の dev トークンを DataStore に自動投入（画面表示なし）
+        runBlocking {
+            if (tokenPreferences.accessToken.first().isEmpty() &&
+                BuildConfig.DEV_ACCESS_TOKEN.isNotEmpty()
+            ) {
+                tokenPreferences.saveBaseUrl(
+                    BuildConfig.DEV_BASE_URL.ifEmpty { TokenPreferences.DEFAULT_BASE_URL }
+                )
+                tokenPreferences.saveAccessToken(BuildConfig.DEV_ACCESS_TOKEN)
+                tokenPreferences.saveRefreshToken(BuildConfig.DEV_REFRESH_TOKEN)
+            }
+        }
+
         // 起動時にトークンを確認（未設定なら settings に飛ばす）
         val hasToken = runBlocking { tokenPreferences.accessToken.first().isNotEmpty() }
 

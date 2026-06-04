@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,6 +10,11 @@ android {
     namespace = "com.sony.dtv.camera_tv"
     compileSdk = 36
 
+    // local.properties からトークンを読み込む
+    val localProps = Properties()
+    val localPropsFile = rootProject.file("local.properties")
+    if (localPropsFile.exists()) localProps.load(localPropsFile.inputStream())
+
     defaultConfig {
         applicationId = "com.sony.dtv.camera_tv"
         minSdk = 31
@@ -16,6 +23,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "DEV_BASE_URL",
+            "\"${localProps.getProperty("dev.baseUrl", "")}\"")
+        buildConfigField("String", "DEV_ACCESS_TOKEN",
+            "\"${localProps.getProperty("dev.accessToken", "")}\"")
+        buildConfigField("String", "DEV_REFRESH_TOKEN",
+            "\"${localProps.getProperty("dev.refreshToken", "")}\"")
     }
 
     buildTypes {
@@ -36,6 +50,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
