@@ -63,7 +63,7 @@ class SlideshowViewModelTest {
         assertEquals(contents, state.contents)
         assertEquals(0, state.currentIndex)
         assertEquals(
-            "https://example.com/api/v1/folders/folder1/contents/c1/resources/thumbnail/binary",
+            "https://example.com/api/v1/folders/folder1/contents/c1/resources/thumbnail_1920/binary",
             state.thumbnailUrl,
         )
         assertEquals("test_token", state.accessToken)

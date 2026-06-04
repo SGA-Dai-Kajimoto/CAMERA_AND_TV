@@ -111,7 +111,7 @@ class SlideshowViewModel(
     // ---------------------------------------------------------------- //
 
     private fun thumbnailUrl(content: Content): String =
-        "$baseUrl/api/v1/folders/$folderId/contents/${content.contentId}/resources/thumbnail/binary"
+        "$baseUrl/api/v1/folders/$folderId/contents/${content.contentId}/resources/thumbnail_1920/binary"
 
     private fun startAutoAdvance() {
         cancelAutoAdvance()
