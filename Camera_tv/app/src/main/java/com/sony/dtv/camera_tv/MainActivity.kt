@@ -55,10 +55,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // local.properties の dev トークンを DataStore に自動投入（画面表示なし）
+        // BuildConfig にトークンがあれば毎回上書きする（local.properties 更新時に即反映）
         runBlocking {
-            if (tokenPreferences.accessToken.first().isEmpty() &&
-                BuildConfig.DEV_ACCESS_TOKEN.isNotEmpty()
-            ) {
+            if (BuildConfig.DEV_ACCESS_TOKEN.isNotEmpty()) {
                 tokenPreferences.saveBaseUrl(
                     BuildConfig.DEV_BASE_URL.ifEmpty { TokenPreferences.DEFAULT_BASE_URL }
                 )
