@@ -70,7 +70,8 @@ class ImagingEdgeRepository(
 
     private fun <T> Response<T>.requireSuccess() {
         if (!isSuccessful) {
-            throw IllegalStateException("API error ${code()}: ${errorBody()?.string()}")
+            val errMsg = try { errorBody()?.string() } catch (_: Exception) { null }
+            throw IllegalStateException("API error ${code()}: $errMsg")
         }
     }
 }

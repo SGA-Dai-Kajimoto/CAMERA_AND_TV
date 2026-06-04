@@ -26,9 +26,9 @@ class AuthInterceptor(
         val response = chain.proceed(request)
 
         if (response.code == 401) {
-            response.close()
             val refreshed = runBlocking { tryRefreshToken() }
             if (refreshed != null) {
+                response.close()  // 再試行するので元のレスポンスを閉じる
                 return chain.proceed(chain.request().withBearerToken(refreshed))
             }
         }
