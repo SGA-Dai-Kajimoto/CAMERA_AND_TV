@@ -3,19 +3,20 @@ package com.sony.dtv.camera_tv
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.sony.dtv.camera_tv.data.local.TokenPreferences
 import com.sony.dtv.camera_tv.data.remote.AuthInterceptor
 import com.sony.dtv.camera_tv.data.remote.ImagingEdgeApi
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
+import com.sony.dtv.camera_tv.ui.folderlist.FolderListScreen
+import com.sony.dtv.camera_tv.ui.slideshow.SlideshowScreen
 import com.sony.dtv.camera_tv.ui.theme.CameraTvTheme
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -54,8 +55,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    // Phase 2 で UI を実装する
-                    PlaceholderScreen()
+                    CameraTvNavGraph(repository = repository)
                 }
             }
         }
@@ -63,19 +63,25 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun PlaceholderScreen() {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(text = "Camera TV - Phase 1")
-    }
-}
+private fun CameraTvNavGraph(repository: ImagingEdgeRepository) {
+    val navController = rememberNavController()
 
-@Preview(showBackground = true)
-@Composable
-private fun PlaceholderScreenPreview() {
-    CameraTvTheme {
-        PlaceholderScreen()
+    NavHost(navController = navController, startDestination = "folderlist") {
+        composable("folderlist") {
+            FolderListScreen(
+                repository = repository,
+                onFolderSelected = { folderId ->
+                    navController.navigate("slideshow/$folderId")
+                },
+            )
+        }
+        composable("slideshow/{folderId}") { backStackEntry ->
+            val folderId = backStackEntry.arguments?.getString("folderId") ?: return@composable
+            SlideshowScreen(
+                folderId = folderId,
+                repository = repository,
+                onBack = { navController.popBackStack() },
+            )
+        }
     }
 }
