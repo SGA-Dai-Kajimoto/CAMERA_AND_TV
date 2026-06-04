@@ -40,25 +40,25 @@
 ### Phase 2: データ層
 
 #### Step 2-1: テスト先行作成（実装前に作成）
-- [ ] `test/data/repository/ImagingEdgeRepositoryTest.kt` — リポジトリの単体テスト（スケルトン）
+- [x] `test/data/repository/ImagingEdgeRepositoryTest.kt` — リポジトリの単体テスト（スケルトン）
       - `getUserMe()` が JSON をパースして `user_id` を返すこと
       - `listFolders()` が `removed_date` ありのフォルダを除外すること
       - `createFolder()` / `renameFolder()` / `deleteFolder()` が正しいエンドポイントに送信すること
       - `listContents()` / `deleteContent()` が正しく動くこと
       - 401 レスポンス時に `AuthInterceptor` がトークンをリフレッシュして再試行すること
-- [ ] `test/data/local/TokenPreferencesTest.kt` — DataStore の読み書きテスト（スケルトン）
+- [x] `test/data/local/TokenPreferencesTest.kt` — DataStore の読み書きテスト（スケルトン）
       - トークンの保存・読み込みが正しく動くこと
 - [ ] テストが **RED（コンパイルエラーまたは失敗）** であることを確認
 
 #### Step 2-2: 実装
-- [ ] `data/model/Folder.kt` — フォルダ DTO（`folder_id`, `display_name` など）
-- [ ] `data/model/Content.kt` — コンテンツ DTO（`content_id`, `display_name`, `filename` など）
-- [ ] `data/remote/ImagingEdgeApi.kt` — Retrofit インターフェース
+- [x] `data/model/Folder.kt` — フォルダ DTO（`folder_id`, `display_name` など）
+- [x] `data/model/Content.kt` — コンテンツ DTO（`content_id`, `display_name`, `filename` など）
+- [x] `data/remote/ImagingEdgeApi.kt` — Retrofit インターフェース
       （全エンドポイントを suspend fun で定義）
-- [ ] `data/remote/AuthInterceptor.kt` — Bearer トークン付与 OkHttp インターセプター
+- [x] `data/remote/AuthInterceptor.kt` — Bearer トークン付与 OkHttp インターセプター
       （401 時にリフレッシュして再試行）
-- [ ] `data/local/TokenPreferences.kt` — DataStore による access_token / refresh_token 保存
-- [ ] `data/repository/ImagingEdgeRepository.kt` — ApiClient 相当のリポジトリ
+- [x] `data/local/TokenPreferences.kt` — DataStore による access_token / refresh_token 保存
+- [x] `data/repository/ImagingEdgeRepository.kt` — ApiClient 相当のリポジトリ
       （Retrofit呼び出し → ドメインモデル変換）
 
 #### Phase 2 完了チェック
