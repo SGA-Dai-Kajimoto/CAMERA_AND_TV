@@ -1,4 +1,4 @@
-package com.sony.dtv.carmera_poc.data.local
+package com.sony.dtv.camera_tv.data.local
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -15,7 +15,6 @@ private val Context.tokenDataStore: DataStore<Preferences> by preferencesDataSto
 
 /**
  * DataStore を使ってトークン情報を永続化するクラス。
- * PC 版の auth_info.json に対応。
  */
 class TokenPreferences(private val dataStore: DataStore<Preferences>) {
 
@@ -56,23 +55,24 @@ class TokenPreferences(private val dataStore: DataStore<Preferences>) {
     suspend fun saveAccount(value: String) { dataStore.edit { it[KEY_ACCOUNT] = value } }
 
     /**
-     * auth_config.json の内容を DataStore に初期値として書き込む。
-     * 既に値があれば上書きしない。
+     * 認証情報を一括で書き込む。既に値があれば上書きしない。
+     * PoC の auth_info.json から初期値をロードする際に使用する。
      */
-    suspend fun initFromConfig(config: Map<String, String>) {
+    suspend fun initIfEmpty(
+        baseUrl: String,
+        appType: String,
+        accessToken: String,
+        accessTokenTtl: Long,
+        refreshToken: String,
+        refreshTokenTtl: Long,
+    ) {
         dataStore.edit { prefs ->
-            if (prefs[KEY_BASE_URL] == null) {
-                config["base_url"]?.let { prefs[KEY_BASE_URL] = it }
-            }
-            if (prefs[KEY_APP_TYPE] == null) {
-                config["app_type"]?.let { prefs[KEY_APP_TYPE] = it }
-            }
-            if (prefs[KEY_ACCESS_TOKEN].isNullOrEmpty()) {
-                config["access_token"]?.let { prefs[KEY_ACCESS_TOKEN] = it }
-            }
-            if (prefs[KEY_REFRESH_TOKEN].isNullOrEmpty()) {
-                config["refresh_token"]?.let { prefs[KEY_REFRESH_TOKEN] = it }
-            }
+            if (!prefs.contains(KEY_BASE_URL)) prefs[KEY_BASE_URL] = baseUrl
+            if (!prefs.contains(KEY_APP_TYPE)) prefs[KEY_APP_TYPE] = appType
+            if (!prefs.contains(KEY_ACCESS_TOKEN)) prefs[KEY_ACCESS_TOKEN] = accessToken
+            if (!prefs.contains(KEY_ACCESS_TOKEN_TTL)) prefs[KEY_ACCESS_TOKEN_TTL] = accessTokenTtl
+            if (!prefs.contains(KEY_REFRESH_TOKEN)) prefs[KEY_REFRESH_TOKEN] = refreshToken
+            if (!prefs.contains(KEY_REFRESH_TOKEN_TTL)) prefs[KEY_REFRESH_TOKEN_TTL] = refreshTokenTtl
         }
     }
 }
