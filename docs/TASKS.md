@@ -62,48 +62,48 @@
       （Retrofit呼び出し → ドメインモデル変換）
 
 #### Phase 2 完了チェック
-- [ ] **単体テスト全通過**: `./gradlew test` で `ImagingEdgeRepositoryTest` が全件グリーン
+- [x] **単体テスト全通過**: `./gradlew test` で `ImagingEdgeRepositoryTest` が全件グリーン
   - `getUserMe()` が JSON をパースして `user_id` を返すこと
   - `listFolders()` が `removed_date` ありのフォルダを除外すること
   - `createFolder()` / `renameFolder()` / `deleteFolder()` が正しいエンドポイントに送信すること
   - `listContents()` / `deleteContent()` が正しく動くこと
   - 401 レスポンス時に `AuthInterceptor` がトークンをリフレッシュして再試行すること
-- [ ] **DataStore 読み書き**: `TokenPreferences` の read/write テスト（`runTest` + `TestCoroutineScheduler`）が通ること
+- [x] **DataStore 読み書き**: `TokenPreferences` の read/write テスト（`runTest` + `TestCoroutineScheduler`）が通ること
 
 ---
 
 ### Phase 3: UI 層
 
 #### Step 3-1: テスト先行作成（実装前に作成）
-- [ ] `test/ui/main/MainViewModelTest.kt` — ViewModel の単体テスト（スケルトン）
+- [x] `test/ui/main/MainViewModelTest.kt` — ViewModel の単体テスト（スケルトン）
       - `loadFolders()` 後に `uiState.folders` が更新されること
       - `createFolder()` 後に `uiState.folders` が再取得されること
       - `selectFolder()` 後に `uiState.contents` が更新されること
       - エラー時に `uiState.error` が設定されること
-- [ ] テストが **RED（コンパイルエラーまたは失敗）** であることを確認
+- [x] テストが **RED（コンパイルエラーまたは失敗）** であることを確認
 
 #### Step 3-2: 実装
-- [ ] `ui/theme/` — Compose テーマ設定（Color, Type, Theme）
-- [ ] `ui/main/MainViewModel.kt` — フォルダ・コンテンツ操作の状態管理
+- [x] `ui/theme/` — Compose テーマ設定（Color, Type, Theme）
+- [x] `ui/main/MainViewModel.kt` — フォルダ・コンテンツ操作の状態管理
       （StateFlow で UiState を公開、Coroutines で非同期実行）
-- [ ] `ui/main/MainScreen.kt` — メイン画面 Composable
+- [x] `ui/main/MainScreen.kt` — メイン画面 Composable
       （左ペイン: フォルダリスト＋操作ボタン、右ペイン: コンテンツリスト＋操作ボタン）
-- [ ] `ui/main/FolderPanel.kt` — フォルダパネル Composable
+- [x] `ui/main/FolderPanel.kt` — フォルダパネル Composable
       （新規作成・名前変更・削除ダイアログを含む）
-- [ ] `ui/main/ContentPanel.kt` — コンテンツパネル Composable
+- [x] `ui/main/ContentPanel.kt` — コンテンツパネル Composable
       （アップロード・削除ボタン、コンテンツ一覧）
-- [ ] `ui/imageviewer/ImageViewerScreen.kt` — 画像ビューア画面 Composable
+- [x] `ui/imageviewer/ImageViewerScreen.kt` — 画像ビューア画面 Composable
       （バイナリダウンロード → Coil で表示）
-- [ ] `MainActivity.kt` 更新 — Navigation Compose でルーティング設定
+- [x] `MainActivity.kt` 更新 — Navigation Compose でルーティング設定
 
 #### Phase 3 完了チェック
-- [ ] **ViewModel 単体テスト全通過**: `./gradlew test` で `MainViewModelTest` が全件グリーン
+- [x] **ViewModel 単体テスト全通過**: `./gradlew test` で `MainViewModelTest` が全件グリーン
   - `loadFolders()` 後に `uiState.folders` が更新されること
   - `createFolder()` 後に `uiState.folders` が再取得されること
   - `selectFolder()` 後に `uiState.contents` が更新されること
   - エラー時に `uiState.error` が設定されること
 - [ ] **Compose プレビュー**: `FolderPanel` / `ContentPanel` / `ImageViewerScreen` に `@Preview` アノテーションを付けて Android Studio でプレビュー表示できること
-- [ ] **ビルド成功**: `./gradlew assembleDebug` がエラーなく完了する
+- [x] **ビルド成功**: `./gradlew assembleDebug` がエラーなく完了する
 
 ---
 
