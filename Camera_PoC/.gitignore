@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+# 認証情報（コミット禁止）
+app/src/main/assets/auth_config.json
