@@ -1,8 +1,6 @@
 package com.sony.dtv.carmera_poc.data.local
 
-import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope

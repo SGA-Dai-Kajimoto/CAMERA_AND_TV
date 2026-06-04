@@ -1,12 +1,17 @@
 package com.sony.dtv.carmera_poc.data.local
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+
+/** Application Context から DataStore を生成するトップレベル拡張 */
+private val Context.tokenDataStore: DataStore<Preferences> by preferencesDataStore(name = "token_prefs")
 
 /**
  * DataStore を使ってトークン情報を永続化するクラス。
@@ -26,6 +31,10 @@ class TokenPreferences(private val dataStore: DataStore<Preferences>) {
 
         const val DEFAULT_BASE_URL = "https://ws.dev.imagingedge.sony.net"
         const val DEFAULT_APP_TYPE = "_trial_"
+
+        /** Context から TokenPreferences を生成するファクトリ */
+        fun create(context: Context): TokenPreferences =
+            TokenPreferences(context.applicationContext.tokenDataStore)
     }
 
     val baseUrl: Flow<String> = dataStore.data.map { it[KEY_BASE_URL] ?: DEFAULT_BASE_URL }
@@ -37,14 +46,14 @@ class TokenPreferences(private val dataStore: DataStore<Preferences>) {
     val userId: Flow<String> = dataStore.data.map { it[KEY_USER_ID] ?: "" }
     val account: Flow<String> = dataStore.data.map { it[KEY_ACCOUNT] ?: "" }
 
-    suspend fun saveBaseUrl(value: String) = dataStore.edit { it[KEY_BASE_URL] = value }
-    suspend fun saveAppType(value: String) = dataStore.edit { it[KEY_APP_TYPE] = value }
-    suspend fun saveAccessToken(value: String) = dataStore.edit { it[KEY_ACCESS_TOKEN] = value }
-    suspend fun saveAccessTokenTtl(value: Long) = dataStore.edit { it[KEY_ACCESS_TOKEN_TTL] = value }
-    suspend fun saveRefreshToken(value: String) = dataStore.edit { it[KEY_REFRESH_TOKEN] = value }
-    suspend fun saveRefreshTokenTtl(value: Long) = dataStore.edit { it[KEY_REFRESH_TOKEN_TTL] = value }
-    suspend fun saveUserId(value: String) = dataStore.edit { it[KEY_USER_ID] = value }
-    suspend fun saveAccount(value: String) = dataStore.edit { it[KEY_ACCOUNT] = value }
+    suspend fun saveBaseUrl(value: String) { dataStore.edit { it[KEY_BASE_URL] = value } }
+    suspend fun saveAppType(value: String) { dataStore.edit { it[KEY_APP_TYPE] = value } }
+    suspend fun saveAccessToken(value: String) { dataStore.edit { it[KEY_ACCESS_TOKEN] = value } }
+    suspend fun saveAccessTokenTtl(value: Long) { dataStore.edit { it[KEY_ACCESS_TOKEN_TTL] = value } }
+    suspend fun saveRefreshToken(value: String) { dataStore.edit { it[KEY_REFRESH_TOKEN] = value } }
+    suspend fun saveRefreshTokenTtl(value: Long) { dataStore.edit { it[KEY_REFRESH_TOKEN_TTL] = value } }
+    suspend fun saveUserId(value: String) { dataStore.edit { it[KEY_USER_ID] = value } }
+    suspend fun saveAccount(value: String) { dataStore.edit { it[KEY_ACCOUNT] = value } }
 
     /**
      * auth_config.json の内容を DataStore に初期値として書き込む。
