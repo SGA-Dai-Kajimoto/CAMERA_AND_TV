@@ -15,10 +15,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
 
 data class SlideshowUiState(
     val isLoading: Boolean = false,
     val contents: List<Content> = emptyList(),
+    val groupedItems: List<ContentListItem> = emptyList(),
+    val availableDates: List<LocalDate> = emptyList(),
+    val selectedDate: LocalDate? = null,
     val currentIndex: Int = 0,
     val isPlaying: Boolean = true,
     val currentImageBytes: ByteArray? = null,
@@ -38,6 +45,7 @@ class SlideshowViewModel(
     val uiState: StateFlow<SlideshowUiState> = _uiState.asStateFlow()
 
     private var autoAdvanceJob: Job? = null
+    private var lastItem: String? = null
 
     init {
         loadContents()
@@ -46,10 +54,22 @@ class SlideshowViewModel(
     fun loadContents() {
         scope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            repository.listContents(folderId)
-                .onSuccess { contents ->
+            repository.listContentsPaged(folderId)
+                .onSuccess { response ->
+                    lastItem = response.lastItem
+                    val contents = response.contents
+                    val grouped = groupByDate(contents)
+                    val dates = extractAvailableDates(contents)
+                    val latestDate = dates.firstOrNull()
                     _uiState.update {
-                        it.copy(isLoading = false, contents = contents, currentIndex = 0)
+                        it.copy(
+                            isLoading = false,
+                            contents = contents,
+                            groupedItems = grouped,
+                            availableDates = dates,
+                            selectedDate = latestDate,
+                            currentIndex = 0,
+                        )
                     }
                     if (contents.isNotEmpty()) {
                         loadCurrentImage()
@@ -62,8 +82,40 @@ class SlideshowViewModel(
         }
     }
 
+    fun loadMoreContents() {
+        val startFrom = lastItem ?: return
+        scope.launch {
+            repository.listContentsPaged(folderId, startFrom = startFrom)
+                .onSuccess { response ->
+                    lastItem = response.lastItem
+                    val allContents = _uiState.value.contents + response.contents
+                    val grouped = groupByDate(allContents)
+                    val dates = extractAvailableDates(allContents)
+                    _uiState.update {
+                        it.copy(
+                            contents = allContents,
+                            groupedItems = grouped,
+                            availableDates = dates,
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(error = e.message) }
+                }
+        }
+    }
+
+    fun selectDate(date: LocalDate) {
+        _uiState.update {
+            it.copy(selectedDate = date, currentIndex = 0, currentImageBytes = null)
+        }
+        loadCurrentImage()
+        restartAutoAdvance()
+    }
+
     fun nextImage() {
-        val size = _uiState.value.contents.size
+        val currentDateContents = currentDateContents()
+        val size = currentDateContents.size
         if (size == 0) return
         _uiState.update {
             it.copy(
@@ -76,7 +128,8 @@ class SlideshowViewModel(
     }
 
     fun prevImage() {
-        val size = _uiState.value.contents.size
+        val currentDateContents = currentDateContents()
+        val size = currentDateContents.size
         if (size == 0) return
         _uiState.update {
             it.copy(
@@ -98,14 +151,70 @@ class SlideshowViewModel(
         _uiState.update { it.copy(error = null) }
     }
 
+    /**
+     * 現在選択中の日付グループに属するコンテンツ一覧を返す。
+     */
+    fun currentDateContents(): List<Content> {
+        val state = _uiState.value
+        val selectedDate = state.selectedDate ?: return state.contents
+        return state.contents.filter { extractDate(it) == selectedDate }
+    }
+
+    // ---------------------------------------------------------------- //
+    // グルーピングロジック
+    // ---------------------------------------------------------------- //
+
+    private fun groupByDate(contents: List<Content>): List<ContentListItem> {
+        val displayFormatter = DateTimeFormatter.ofPattern("yyyy年M月d日")
+
+        return contents
+            .sortedByDescending { extractDate(it)?.toEpochDay() ?: Long.MIN_VALUE }
+            .groupBy { extractDate(it) }
+            .flatMap { (date, items) ->
+                val header = ContentListItem.DateHeader(
+                    date = date ?: LocalDate.MIN,
+                    label = date?.format(displayFormatter) ?: "日付不明",
+                )
+                listOf(header) + items.map { ContentListItem.ContentItem(it) }
+            }
+    }
+
+    private fun extractAvailableDates(contents: List<Content>): List<LocalDate> {
+        return contents
+            .mapNotNull { extractDate(it) }
+            .distinct()
+            .sortedDescending()
+    }
+
+    private fun extractDate(content: Content): LocalDate? {
+        content.recordedDate?.let {
+            return try {
+                OffsetDateTime.parse(it).toLocalDate()
+            } catch (_: Exception) { null }
+        }
+        content.recordedDateLocalTime?.let {
+            return try {
+                LocalDateTime.parse(it).toLocalDate()
+            } catch (_: Exception) { null }
+        }
+        content.createdDate?.let {
+            return try {
+                OffsetDateTime.parse(it).toLocalDate()
+            } catch (_: Exception) { null }
+        }
+        return null
+    }
+
     // ---------------------------------------------------------------- //
     // Private helpers
     // ---------------------------------------------------------------- //
 
     private fun loadCurrentImage() {
+        val dateContents = currentDateContents()
+        if (dateContents.isEmpty()) return
         val state = _uiState.value
-        if (state.contents.isEmpty()) return
-        val content = state.contents[state.currentIndex]
+        val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
+        val content = dateContents[index]
         scope.launch {
             _uiState.update { it.copy(isImageLoading = true) }
             repository.getContentBinary(folderId, content.contentId)
@@ -124,8 +233,9 @@ class SlideshowViewModel(
             while (true) {
                 delay(SLIDESHOW_INTERVAL_MS)
                 val state = _uiState.value
-                if (state.isPlaying && state.contents.isNotEmpty()) {
-                    val newIndex = (state.currentIndex + 1) % state.contents.size
+                val dateContents = currentDateContents()
+                if (state.isPlaying && dateContents.isNotEmpty()) {
+                    val newIndex = (state.currentIndex + 1) % dateContents.size
                     _uiState.update { it.copy(currentIndex = newIndex, currentImageBytes = null) }
                     loadCurrentImage()
                 }
