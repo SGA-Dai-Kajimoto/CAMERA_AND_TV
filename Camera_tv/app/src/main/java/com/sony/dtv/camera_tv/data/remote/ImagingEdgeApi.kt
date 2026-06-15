@@ -9,6 +9,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.Streaming
 
 /**
@@ -27,7 +28,12 @@ interface ImagingEdgeApi {
     suspend fun listFolders(): Response<FolderListResponse>
 
     @GET("api/v1/folders/{folderId}/contents")
-    suspend fun listContents(@Path("folderId") folderId: String): Response<ContentListResponse>
+    suspend fun listContents(
+        @Path("folderId") folderId: String,
+        @Query("order_by") orderBy: String? = "updated_date_desc",
+        @Query("limit") limit: Int? = 300,
+        @Query("start_from") startFrom: String? = null,
+    ): Response<ContentListResponse>
 
     @Streaming
     @GET("api/v1/folders/{folderId}/contents/{contentId}/resources/{kind}/binary")

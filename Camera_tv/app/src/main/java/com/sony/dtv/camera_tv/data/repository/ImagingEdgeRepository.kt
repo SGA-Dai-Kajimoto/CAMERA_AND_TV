@@ -4,6 +4,7 @@ import com.sony.dtv.camera_tv.data.local.TokenPreferences
 import com.sony.dtv.camera_tv.data.model.Content
 import com.sony.dtv.camera_tv.data.model.Folder
 import com.sony.dtv.camera_tv.data.remote.ImagingEdgeApi
+import com.sony.dtv.camera_tv.data.remote.dto.ContentListResponse
 import retrofit2.Response
 
 /**
@@ -48,6 +49,25 @@ class ImagingEdgeRepository(
         val response = api.listContents(folderId)
         response.requireSuccess()
         response.body()!!.contents
+    }
+
+    /**
+     * コンテンツ一覧を取得する（ページネーション・ソート対応）。
+     * @param folderId フォルダID
+     * @param orderBy ソート順。"updated_date_desc" or "updated_date_asc"
+     * @param limit 取得件数上限（1〜300）
+     * @param startFrom ページネーション用。前回レスポンスの lastItem を指定
+     * @return ContentListResponse（contents + lastItem）
+     */
+    suspend fun listContentsPaged(
+        folderId: String,
+        orderBy: String = "updated_date_desc",
+        limit: Int = 300,
+        startFrom: String? = null,
+    ): Result<ContentListResponse> = runCatching {
+        val response = api.listContents(folderId, orderBy, limit, startFrom)
+        response.requireSuccess()
+        response.body()!!
     }
 
     // ---------------------------------------------------------------- //

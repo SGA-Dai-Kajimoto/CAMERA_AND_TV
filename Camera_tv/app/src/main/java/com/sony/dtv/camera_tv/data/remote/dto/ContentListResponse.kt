@@ -5,4 +5,5 @@ import com.sony.dtv.camera_tv.data.model.Content
 
 data class ContentListResponse(
     @SerializedName("contents") val contents: List<Content> = emptyList(),
+    @SerializedName("last_item") val lastItem: String? = null,
 )
