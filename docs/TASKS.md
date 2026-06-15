@@ -113,32 +113,32 @@
 
 ### Phase 6: グルーピングロジック
 
-- [ ] `ui/slideshow/ContentListItem.kt` 作成（`sealed class`: `DateHeader` / `ContentItem`）
-- [ ] `ui/slideshow/SlideshowViewModel.kt` に `groupByDate()` / `extractDate()` ロジックを追加
-- [ ] `SlideshowUiState` に `groupedItems: List<ContentListItem>` を追加
-- [ ] ページネーション対応: `loadMoreContents()` で `last_item` を使い追加読み込み
+- [x] `ui/slideshow/ContentListItem.kt` 作成（`sealed class`: `DateHeader` / `ContentItem`）
+- [x] `ui/slideshow/SlideshowViewModel.kt` に `groupByDate()` / `extractDate()` ロジックを追加
+- [x] `SlideshowUiState` に `groupedItems: List<ContentListItem>` を追加
+- [x] ページネーション対応: `loadMoreContents()` で `last_item` を使い追加読み込み
 
 ### Phase 7: TV画面UI実装
 
 #### 画面1: メイン写真表示
-- [ ] 起動時に最新日付グループの写真をフルスクリーン表示
-- [ ] 左右ボタンで同一日付グループ内の写真切替
-- [ ] 下ボタン or 決定ボタンで操作メニュー（画面2）をオーバーレイ表示
+- [x] 起動時に最新日付グループの写真をフルスクリーン表示
+- [x] 左右ボタンで同一日付グループ内の写真切替
+- [x] 下ボタン or 決定ボタンで操作メニュー（画面2）をオーバーレイ表示
 
 #### 画面2: 操作メニュー（オーバーレイ）
-- [ ] メニューバーUI実装（日付選択 / お気に入り登録 / 削除）
-- [ ] Backキーでメニュー非表示 → 画面1に戻る
-- [ ] フォーカス移動: 左右ボタンでメニューボタン間移動
+- [x] メニューバーUI実装（日付選択 / お気に入り登録 / 削除）
+- [x] Backキーでメニュー非表示 → 画面1に戻る
+- [x] フォーカス移動: 左右ボタンでメニューボタン間移動
 
 #### 日付選択画面
-- [ ] 日付ごとにグルーピングされたコンテンツ一覧を表示（`TvLazyColumn`）
-- [ ] 日付選択後、画面1に戻り選択日付グループの写真を表示
-- [ ] D-Padフォーカス対応（↑↓でリスト移動、決定で確定、Backで戻る）
+- [x] 日付ごとにグルーピングされたコンテンツ一覧を表示（`TvLazyColumn`）
+- [x] 日付選択後、画面1に戻り選択日付グループの写真を表示
+- [x] D-Padフォーカス対応（↑↓でリスト移動、決定で確定、Backで戻る）
 
 #### お気に入り・削除機能
-- [ ] お気に入り登録: タグAPI（`POST .../contents/{content_id}:setTags`）で `favorite:1` を付与
-- [ ] 削除ボタン押下時に削除確認Toastを表示
-- [ ] 確認後 `POST .../contents:remove` で削除実行 → 次の写真を自動表示
+- [x] お気に入り登録: タグAPI（`POST .../contents/{content_id}:setTags`）で `favorite:1` を付与
+- [x] 削除ボタン押下時に削除確認Toastを表示
+- [x] 確認後 `POST .../contents:remove` で削除実行 → 次の写真を自動表示
 
 ### Phase 8: TV画面 結合・動作確認
 

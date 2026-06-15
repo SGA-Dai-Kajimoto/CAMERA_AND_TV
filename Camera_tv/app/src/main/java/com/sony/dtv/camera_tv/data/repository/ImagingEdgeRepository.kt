@@ -85,6 +85,33 @@ class ImagingEdgeRepository(
     }
 
     // ---------------------------------------------------------------- //
+    // お気に入り（タグ操作）
+    // ---------------------------------------------------------------- //
+
+    suspend fun setContentTags(
+        folderId: String,
+        contentId: String,
+        tags: List<String>,
+    ): Result<Unit> = runCatching {
+        val body = mapOf("tags" to tags)
+        val response = api.setContentTags(folderId, contentId, body)
+        response.requireSuccess()
+    }
+
+    // ---------------------------------------------------------------- //
+    // コンテンツ削除
+    // ---------------------------------------------------------------- //
+
+    suspend fun removeContents(
+        folderId: String,
+        contentIds: List<String>,
+    ): Result<Unit> = runCatching {
+        val body = mapOf("content_ids" to contentIds)
+        val response = api.removeContents(folderId, body)
+        response.requireSuccess()
+    }
+
+    // ---------------------------------------------------------------- //
     // 内部ユーティリティ
     // ---------------------------------------------------------------- //
 

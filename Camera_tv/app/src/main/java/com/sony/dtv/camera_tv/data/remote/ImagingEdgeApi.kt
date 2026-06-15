@@ -15,6 +15,7 @@ import retrofit2.http.Streaming
 /**
  * Imaging Edge API インターフェース。
  * TV アプリは読み取り専用のため、一覧取得・バイナリ取得・認証のみを定義する。
+ * お気に入り（タグ）と削除は TV 画面リニューアルで追加。
  */
 interface ImagingEdgeApi {
 
@@ -42,4 +43,17 @@ interface ImagingEdgeApi {
         @Path("contentId") contentId: String,
         @Path("kind") kind: String,
     ): Response<ResponseBody>
+
+    @POST("api/v1/folders/{folderId}/contents/{contentId}:setTags")
+    suspend fun setContentTags(
+        @Path("folderId") folderId: String,
+        @Path("contentId") contentId: String,
+        @Body body: Map<String, Any>,
+    ): Response<Map<String, Any>>
+
+    @POST("api/v1/folders/{folderId}/contents:remove")
+    suspend fun removeContents(
+        @Path("folderId") folderId: String,
+        @Body body: Map<String, Any>,
+    ): Response<Map<String, Any>>
 }

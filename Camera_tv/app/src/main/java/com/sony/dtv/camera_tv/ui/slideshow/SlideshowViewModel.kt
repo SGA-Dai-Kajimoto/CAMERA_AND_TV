@@ -152,6 +152,61 @@ class SlideshowViewModel(
     }
 
     /**
+     * 現在表示中のコンテンツにお気に入りタグを付与する。
+     */
+    fun toggleFavorite() {
+        val dateContents = currentDateContents()
+        if (dateContents.isEmpty()) return
+        val state = _uiState.value
+        val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
+        val content = dateContents[index]
+        scope.launch {
+            repository.setContentTags(folderId, content.contentId, listOf("favorite:1"))
+                .onFailure { e ->
+                    _uiState.update { it.copy(error = e.message) }
+                }
+        }
+    }
+
+    /**
+     * 現在表示中のコンテンツを削除し、次の写真に自動遷移する。
+     */
+    fun deleteCurrentContent() {
+        val dateContents = currentDateContents()
+        if (dateContents.isEmpty()) return
+        val state = _uiState.value
+        val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
+        val content = dateContents[index]
+        scope.launch {
+            repository.removeContents(folderId, listOf(content.contentId))
+                .onSuccess {
+                    // 削除後にコンテンツリストを再構築
+                    val newContents = state.contents.filter { it.contentId != content.contentId }
+                    val grouped = groupByDate(newContents)
+                    val dates = extractAvailableDates(newContents)
+                    val selectedDate = if (dates.contains(state.selectedDate)) state.selectedDate else dates.firstOrNull()
+                    val newDateContents = newContents.filter { extractDate(it) == selectedDate }
+                    val newIndex = if (newDateContents.isEmpty()) 0
+                        else state.currentIndex.coerceIn(0, newDateContents.size - 1)
+                    _uiState.update {
+                        it.copy(
+                            contents = newContents,
+                            groupedItems = grouped,
+                            availableDates = dates,
+                            selectedDate = selectedDate,
+                            currentIndex = newIndex,
+                            currentImageBytes = null,
+                        )
+                    }
+                    if (newDateContents.isNotEmpty()) loadCurrentImage()
+                }
+                .onFailure { e ->
+                    _uiState.update { it.copy(error = e.message) }
+                }
+        }
+    }
+
+    /**
      * 現在選択中の日付グループに属するコンテンツ一覧を返す。
      */
     fun currentDateContents(): List<Content> {
