@@ -1,4 +1,4 @@
-package com.sony.dtv.camera_tv.ui.slideshow
+Ôªøpackage com.sony.dtv.camera_tv.ui.slideshow
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -14,7 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.border
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,28 +47,30 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
- * TVâÊñ  ÉÅÉCÉìComposableÅB
- * 3Ç¬ÇÃâÊñ èÛë‘Çä«óù:
- *  - Photo: ÉtÉãÉXÉNÉäÅ[Éìé ê^ï\é¶ÅiâÊñ 1Åj
- *  - Menu: ëÄçÏÉÅÉjÉÖÅ[ÉIÅ[ÉoÅ[ÉåÉCÅiâÊñ 2Åj
- *  - DateSelect: ì˙ïtëIëâÊñ 
+ * TVÁîªÈù¢„É°„Ç§„É≥Composable„ÄÇ
+ * 3„Å§„ÅÆÁîªÈù¢Áä∂ÊÖã„ÇíÁÆ°ÁêÜ:
+ *  - Photo: „Éï„É´„Çπ„ÇØ„É™„Éº„É≥ÂÜôÁúüË°®Á§∫(ÁîªÈù¢1)
+ *  - Menu: Êìç‰Ωú„É°„Éã„É•„Éº„Ç™„Éº„Éê„Éº„É¨„Ç§(ÁîªÈù¢2)
+ *  - DateSelect: Êó•‰ªòÈÅ∏ÊäûÁîªÈù¢
  */
 @Composable
 fun SlideshowScreen(
-    folderId: String,
     repository: ImagingEdgeRepository,
-    onBack: () -> Unit,
 ) {
     val viewModel = viewModel<SlideshowViewModel>(
-        factory = SlideshowViewModel.factory(repository, folderId),
-        key = "slideshow_$folderId",
+        factory = SlideshowViewModel.factory(repository),
     )
     val uiState by viewModel.uiState.collectAsState()
 
@@ -73,14 +80,14 @@ fun SlideshowScreen(
 
     val photoFocusRequester = remember { FocusRequester() }
 
-    // ãNìÆéûÇ…ÉtÉHÅ[ÉJÉXÇóvãÅ
+    // Ëµ∑ÂãïÊôÇ„Å´„Éï„Ç©„Éº„Ç´„Çπ„ÇíË¶ÅÊ±Ç
     LaunchedEffect(screenMode) {
         if (screenMode == ScreenMode.Photo) {
             try { photoFocusRequester.requestFocus() } catch (_: Exception) {}
         }
     }
 
-    // ToastÉÅÉbÉZÅ[ÉWé©ìÆè¡ãé
+    // Toast„É°„ÉÉ„Çª„Éº„Ç∏Ëá™ÂãïÊ∂àÂéª
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
             kotlinx.coroutines.delay(2000)
@@ -99,7 +106,7 @@ fun SlideshowScreen(
 
             uiState.error != null -> {
                 Text(
-                    text = "ÉGÉâÅ[: ${uiState.error}",
+                    text = "Error: ${uiState.error}",
                     color = Color.White,
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
@@ -107,7 +114,7 @@ fun SlideshowScreen(
 
             uiState.contents.isEmpty() -> {
                 Text(
-                    text = "Ç±ÇÃÉtÉHÉãÉ_Ç…é ê^ÇÕÇ†ÇËÇ‹ÇπÇÒ",
+                    text = "No photos in this folder",
                     color = Color.White,
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.align(Alignment.Center),
@@ -123,17 +130,19 @@ fun SlideshowScreen(
                             onPrev = { viewModel.prevImage() },
                             onNext = { viewModel.nextImage() },
                             onShowMenu = { screenMode = ScreenMode.Menu },
-                            onBack = onBack,
+                            onBack = { /* no previous screen */ },
                         )
                     }
 
                     ScreenMode.Menu -> {
                         PhotoBackground(uiState = uiState)
                         MenuOverlay(
+                            uiState = uiState,
+                            viewModel = viewModel,
                             onDateSelect = { screenMode = ScreenMode.DateSelect },
                             onFavorite = {
                                 viewModel.toggleFavorite()
-                                toastMessage = "Ç®ãCÇ…ì¸ÇËÇ…ìoò^ÇµÇ‹ÇµÇΩ"
+                                toastMessage = "Registered as favorite"
                                 screenMode = ScreenMode.Photo
                             },
                             onDelete = { showDeleteConfirm = true },
@@ -143,7 +152,7 @@ fun SlideshowScreen(
                             DeleteConfirmOverlay(
                                 onConfirm = {
                                     viewModel.deleteCurrentContent()
-                                    toastMessage = "çÌèúÇµÇ‹ÇµÇΩ"
+                                    toastMessage = "Deleted"
                                     showDeleteConfirm = false
                                     screenMode = ScreenMode.Photo
                                 },
@@ -169,7 +178,7 @@ fun SlideshowScreen(
             }
         }
 
-        // Toastï\é¶
+        // Toast
         AnimatedVisibility(
             visible = toastMessage != null,
             enter = fadeIn(),
@@ -191,7 +200,7 @@ fun SlideshowScreen(
 private enum class ScreenMode { Photo, Menu, DateSelect }
 
 // ============================================================
-// âÊñ 1: ÉtÉãÉXÉNÉäÅ[Éìé ê^ï\é¶
+// Screen 1: Fullscreen photo display
 // ============================================================
 
 @Composable
@@ -214,7 +223,7 @@ private fun PhotoScreen(
                         Key.DirectionLeft -> { onPrev(); true }
                         Key.DirectionRight -> { onNext(); true }
                         Key.DirectionDown, Key.Enter, Key.DirectionCenter -> { onShowMenu(); true }
-                        Key.Back -> { onBack(); true }
+                        Key.DirectionUp, Key.Back -> { onBack(); true }
                         else -> false
                     }
                 } else false
@@ -229,7 +238,7 @@ private fun PhotoScreen(
             )
         }
 
-        // åªç›à íuÉCÉìÉWÉPÅ[É^Å[
+        // Position indicator
         val dateContents = uiState.contents.filter { content ->
             uiState.selectedDate == null || extractDateFromContent(content) == uiState.selectedDate
         }
@@ -246,7 +255,7 @@ private fun PhotoScreen(
             )
         }
 
-        // ëIëíÜÇÃì˙ïtï\é¶
+        // Selected date display
         uiState.selectedDate?.let { date ->
             Text(
                 text = date.format(DateTimeFormatter.ofPattern("yyyy/MM/dd")),
@@ -264,56 +273,108 @@ private fun PhotoScreen(
 
 @Composable
 private fun PhotoBackground(uiState: SlideshowUiState) {
-    if (uiState.currentImageBytes != null) {
-        AsyncImage(
-            model = uiState.currentImageBytes,
-            contentDescription = "é ê^",
-            contentScale = ContentScale.Fit,
-            modifier = Modifier.fillMaxSize(),
-        )
+    val bytes = uiState.currentImageBytes
+    if (bytes != null) {
+        val bitmap = remember(bytes) {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Photo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
 // ============================================================
-// âÊñ 2: ëÄçÏÉÅÉjÉÖÅ[ÉIÅ[ÉoÅ[ÉåÉC
+// Screen 2: Menu overlay
 // ============================================================
 
 @Composable
 private fun MenuOverlay(
+    uiState: SlideshowUiState,
+    viewModel: SlideshowViewModel,
     onDateSelect: () -> Unit,
     onFavorite: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var focusedIndex by remember { mutableIntStateOf(0) }
+    // 0=buttons area, 1=thumbnail strip
+    var focusArea by remember { mutableIntStateOf(0) }
+    var buttonIndex by remember { mutableIntStateOf(0) }
+    var thumbIndex by remember { mutableIntStateOf(uiState.currentIndex) }
     val menuFocusRequester = remember { FocusRequester() }
+    val thumbListState = rememberLazyListState()
 
+    val dateContents = viewModel.currentDateContents()
+
+    // Load thumbnails when menu is shown
     LaunchedEffect(Unit) {
+        viewModel.loadThumbnails()
         try { menuFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
+
+    // Scroll to focused thumbnail
+    LaunchedEffect(thumbIndex) {
+        if (focusArea == 1 && dateContents.isNotEmpty()) {
+            thumbListState.animateScrollToItem(thumbIndex.coerceIn(0, dateContents.size - 1))
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.4f))
+            .background(Color.Gray.copy(alpha = 0.5f))
             .focusRequester(menuFocusRequester)
             .focusable()
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.key) {
                         Key.DirectionLeft -> {
-                            focusedIndex = (focusedIndex - 1).coerceAtLeast(0)
+                            if (focusArea == 0) {
+                                buttonIndex = (buttonIndex - 1).coerceAtLeast(0)
+                            } else {
+                                thumbIndex = (thumbIndex - 1).coerceAtLeast(0)
+                            }
                             true
                         }
                         Key.DirectionRight -> {
-                            focusedIndex = (focusedIndex + 1).coerceAtMost(2)
+                            if (focusArea == 0) {
+                                buttonIndex = (buttonIndex + 1).coerceAtMost(2)
+                            } else {
+                                thumbIndex = (thumbIndex + 1).coerceAtMost(dateContents.size - 1)
+                            }
+                            true
+                        }
+                        Key.DirectionDown -> {
+                            if (focusArea == 0) {
+                                focusArea = 1
+                                thumbIndex = uiState.currentIndex.coerceIn(0, dateContents.size - 1)
+                            }
+                            true
+                        }
+                        Key.DirectionUp -> {
+                            if (focusArea == 1) {
+                                focusArea = 0
+                            } else {
+                                onDismiss()
+                            }
                             true
                         }
                         Key.Enter, Key.DirectionCenter -> {
-                            when (focusedIndex) {
-                                0 -> onDateSelect()
-                                1 -> onFavorite()
-                                2 -> onDelete()
+                            if (focusArea == 0) {
+                                when (buttonIndex) {
+                                    0 -> onDateSelect()
+                                    1 -> onFavorite()
+                                    2 -> onDelete()
+                                }
+                            } else {
+                                // Select thumbnail ‚Üí jump to that image
+                                viewModel.selectIndex(thumbIndex)
+                                onDismiss()
                             }
                             true
                         }
@@ -323,20 +384,79 @@ private fun MenuOverlay(
                 } else false
             },
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.8f))
-                .padding(horizontal = 32.dp, vertical = 16.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+                .background(Color.Black.copy(alpha = 0.7f))
+                .padding(vertical = 12.dp),
         ) {
-            MenuButton(label = "ì˙ïtëIë", isFocused = focusedIndex == 0, onClick = onDateSelect)
-            Spacer(modifier = Modifier.width(24.dp))
-            MenuButton(label = "Ç®ãCÇ…ì¸ÇË", isFocused = focusedIndex == 1, onClick = onFavorite)
-            Spacer(modifier = Modifier.width(24.dp))
-            MenuButton(label = "çÌèú", isFocused = focusedIndex == 2, onClick = onDelete)
+            // Button row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MenuButton(label = "Date", isFocused = focusArea == 0 && buttonIndex == 0, onClick = onDateSelect)
+                Spacer(modifier = Modifier.width(24.dp))
+                MenuButton(label = "Favorite", isFocused = focusArea == 0 && buttonIndex == 1, onClick = onFavorite)
+                Spacer(modifier = Modifier.width(24.dp))
+                MenuButton(label = "Delete", isFocused = focusArea == 0 && buttonIndex == 2, onClick = onDelete)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Thumbnail strip (centered)
+            LazyRow(
+                state = thumbListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp, horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            ) {
+                itemsIndexed(dateContents) { index, content ->
+                    val isFocused = focusArea == 1 && index == thumbIndex
+                    val isCurrentImage = index == uiState.currentIndex
+                    val thumbBytes = uiState.thumbnails[content.contentId]
+
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .border(
+                                width = if (isFocused) 3.dp else if (isCurrentImage) 2.dp else 0.dp,
+                                color = when {
+                                    isFocused -> Color.White
+                                    isCurrentImage -> Color(0xFF4488FF)
+                                    else -> Color.Transparent
+                                },
+                            )
+                            .background(Color.DarkGray),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (thumbBytes != null) {
+                            val bitmap = remember(thumbBytes) {
+                                BitmapFactory.decodeByteArray(thumbBytes, 0, thumbBytes.size)
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = "Thumbnail ${index + 1}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "${index + 1}",
+                                color = Color.Gray,
+                                fontSize = 12.sp,
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -360,7 +480,7 @@ private fun MenuButton(
 }
 
 // ============================================================
-// çÌèúämîFÉIÅ[ÉoÅ[ÉåÉC
+// Delete confirmation overlay
 // ============================================================
 
 @Composable
@@ -401,7 +521,7 @@ private fun DeleteConfirmOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "Ç±ÇÃé ê^ÇçÌèúÇµÇ‹Ç∑Ç©ÅH",
+                text = "Delete this photo?",
                 color = Color.White,
                 fontSize = 20.sp,
             )
@@ -414,7 +534,7 @@ private fun DeleteConfirmOverlay(
                         contentColor = Color.White,
                     ),
                 ) {
-                    Text("çÌèúÇ∑ÇÈ")
+                    Text("Delete")
                 }
                 Button(
                     onClick = onCancel,
@@ -423,7 +543,7 @@ private fun DeleteConfirmOverlay(
                         contentColor = if (focusedIndex == 1) Color.Black else Color.White,
                     ),
                 ) {
-                    Text("ÉLÉÉÉìÉZÉã")
+                    Text("Cancel")
                 }
             }
         }
@@ -431,7 +551,7 @@ private fun DeleteConfirmOverlay(
 }
 
 // ============================================================
-// ì˙ïtëIëâÊñ 
+// Date selection screen (Calendar)
 // ============================================================
 
 @Composable
@@ -441,32 +561,131 @@ private fun DateSelectScreen(
     onDateSelected: (LocalDate) -> Unit,
     onBack: () -> Unit,
 ) {
-    var focusedIndex by remember { mutableIntStateOf(dates.indexOf(selectedDate).coerceAtLeast(0)) }
-    val dateFocusRequester = remember { FocusRequester() }
+    val availableDatesSet = remember(dates) { dates.toSet() }
+    val initialMonth = selectedDate?.let { YearMonth.from(it) }
+        ?: dates.firstOrNull()?.let { YearMonth.from(it) }
+        ?: YearMonth.now()
+
+    var currentMonth by remember { mutableStateOf(initialMonth) }
+    // focusedRow: 0=month header area, 1..6=calendar weeks
+    var focusedRow by remember { mutableIntStateOf(1) }
+    var focusedCol by remember { mutableIntStateOf(0) }
+
+    val calendarFocusRequester = remember { FocusRequester() }
+
+    // Build the grid for current month
+    val firstDayOfMonth = currentMonth.atDay(1)
+    val daysInMonth = currentMonth.lengthOfMonth()
+    // Monday=1 .. Sunday=7, column offset (0-based, Mon=0)
+    val startDayOfWeek = (firstDayOfMonth.dayOfWeek.value - 1) // 0=Mon
+    // Grid: 6 rows x 7 cols, each cell = day number or 0 (empty)
+    val grid = remember(currentMonth) {
+        val g = Array(6) { IntArray(7) }
+        for (day in 1..daysInMonth) {
+            val cellIndex = startDayOfWeek + day - 1
+            val row = cellIndex / 7
+            val col = cellIndex % 7
+            g[row][col] = day
+        }
+        g
+    }
+
+    // Resolve focused date
+    val focusedDay = if (focusedRow in 1..6) {
+        val day = grid[focusedRow - 1][focusedCol]
+        if (day > 0) currentMonth.atDay(day) else null
+    } else null
+
+    // Initialize focus to selectedDate or first available date in month
+    LaunchedEffect(currentMonth) {
+        val targetDate = if (selectedDate != null && YearMonth.from(selectedDate) == currentMonth) {
+            selectedDate
+        } else {
+            // Find first available date in this month
+            dates.filter { YearMonth.from(it) == currentMonth }.minOrNull()
+        }
+        if (targetDate != null) {
+            val day = targetDate.dayOfMonth
+            val cellIndex = startDayOfWeek + day - 1
+            focusedRow = (cellIndex / 7) + 1
+            focusedCol = cellIndex % 7
+        } else {
+            focusedRow = 1
+            focusedCol = 0
+        }
+    }
 
     LaunchedEffect(Unit) {
-        try { dateFocusRequester.requestFocus() } catch (_: Exception) {}
+        try { calendarFocusRequester.requestFocus() } catch (_: Exception) {}
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF1A1A1A))
-            .focusRequester(dateFocusRequester)
+            .focusRequester(calendarFocusRequester)
             .focusable()
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     when (keyEvent.key) {
+                        Key.DirectionLeft -> {
+                            if (focusedRow == 0) {
+                                // Move to previous month
+                                currentMonth = currentMonth.minusMonths(1)
+                            } else {
+                                val newCol = focusedCol - 1
+                                if (newCol >= 0) focusedCol = newCol
+                                else {
+                                    // Wrap to previous row
+                                    val newRow = focusedRow - 1
+                                    if (newRow >= 1) {
+                                        focusedRow = newRow
+                                        focusedCol = 6
+                                    }
+                                }
+                            }
+                            true
+                        }
+                        Key.DirectionRight -> {
+                            if (focusedRow == 0) {
+                                // Move to next month
+                                currentMonth = currentMonth.plusMonths(1)
+                            } else {
+                                val newCol = focusedCol + 1
+                                if (newCol <= 6) focusedCol = newCol
+                                else {
+                                    // Wrap to next row
+                                    val newRow = focusedRow + 1
+                                    if (newRow <= 6) {
+                                        focusedRow = newRow
+                                        focusedCol = 0
+                                    }
+                                }
+                            }
+                            true
+                        }
                         Key.DirectionUp -> {
-                            focusedIndex = (focusedIndex - 1).coerceAtLeast(0)
+                            val newRow = focusedRow - 1
+                            if (newRow >= 0) focusedRow = newRow
                             true
                         }
                         Key.DirectionDown -> {
-                            focusedIndex = (focusedIndex + 1).coerceAtMost(dates.size - 1)
+                            val newRow = focusedRow + 1
+                            if (newRow <= 6) focusedRow = newRow
                             true
                         }
                         Key.Enter, Key.DirectionCenter -> {
-                            if (dates.isNotEmpty()) onDateSelected(dates[focusedIndex])
+                            if (focusedRow == 0) {
+                                // No action on month header
+                            } else {
+                                val day = grid.getOrNull(focusedRow - 1)?.getOrNull(focusedCol) ?: 0
+                                if (day > 0) {
+                                    val date = currentMonth.atDay(day)
+                                    if (date in availableDatesSet) {
+                                        onDateSelected(date)
+                                    }
+                                }
+                            }
                             true
                         }
                         Key.Back -> { onBack(); true }
@@ -479,41 +698,121 @@ private fun DateSelectScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 48.dp, vertical = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "ì˙ïtÇëIë",
-                color = Color.White,
-                fontSize = 24.sp,
-                modifier = Modifier.padding(bottom = 16.dp),
-            )
-
-            Column(
+            // Month navigation header
+            val monthHeaderFocused = focusedRow == 0
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                    .fillMaxWidth()
+                    .background(if (monthHeaderFocused) Color.DarkGray else Color.Transparent)
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                dates.forEachIndexed { index, date ->
-                    val isFocused = index == focusedIndex
-                    val isSelected = date == selectedDate
+                Text(
+                    text = "\u25C0",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(end = 24.dp),
+                )
+                Text(
+                    text = "${currentMonth.year}Âπ¥${currentMonth.monthValue}Êúà",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                )
+                Text(
+                    text = "\u25B6",
+                    color = Color.White,
+                    fontSize = 20.sp,
+                    modifier = Modifier.padding(start = 24.dp),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Day-of-week header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                val dayNames = listOf("Êúà", "ÁÅ´", "Ê∞¥", "Êú®", "Èáë", "Âúü", "Êó•")
+                dayNames.forEach { name ->
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                when {
-                                    isFocused -> Color.White
-                                    isSelected -> Color.Gray.copy(alpha = 0.4f)
-                                    else -> Color.Transparent
-                                }
-                            )
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = date.format(DateTimeFormatter.ofPattern("yyyyîNMMåéddì˙")),
-                            color = if (isFocused) Color.Black else Color.White,
-                            fontSize = 18.sp,
+                            text = name,
+                            color = Color.Gray,
+                            fontSize = 14.sp,
                         )
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Calendar grid
+            for (row in 0 until 6) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    for (col in 0 until 7) {
+                        val day = grid[row][col]
+                        val date = if (day > 0) currentMonth.atDay(day) else null
+                        val hasImages = date != null && date in availableDatesSet
+                        val isFocused = focusedRow == row + 1 && focusedCol == col
+                        val isSelected = date == selectedDate
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .padding(2.dp)
+                                .background(
+                                    when {
+                                        isFocused && hasImages -> Color.White
+                                        isFocused -> Color.Gray.copy(alpha = 0.5f)
+                                        isSelected -> Color(0xFF4488FF).copy(alpha = 0.6f)
+                                        hasImages -> Color(0xFF4488FF).copy(alpha = 0.3f)
+                                        else -> Color.Transparent
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (day > 0) {
+                                Text(
+                                    text = day.toString(),
+                                    color = when {
+                                        isFocused && hasImages -> Color.Black
+                                        hasImages -> Color.White
+                                        else -> Color.Gray.copy(alpha = 0.4f)
+                                    },
+                                    fontSize = 16.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Legend
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.width(16.dp).height(16.dp).background(Color(0xFF4488FF).copy(alpha = 0.3f)))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "ÁîªÂÉè„ÅÇ„Çä", color = Color.Gray, fontSize = 12.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.width(16.dp).height(16.dp).background(Color.Gray.copy(alpha = 0.4f)))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(text = "ÁîªÂÉè„Å™„Åó", color = Color.Gray, fontSize = 12.sp)
                 }
             }
         }
@@ -521,7 +820,7 @@ private fun DateSelectScreen(
 }
 
 // ============================================================
-// ÉÜÅ[ÉeÉBÉäÉeÉB
+// Utility
 // ============================================================
 
 private fun extractDateFromContent(content: com.sony.dtv.camera_tv.data.model.Content): LocalDate? {

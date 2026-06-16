@@ -10,6 +10,7 @@ import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import android.util.Log
 
 /**
  * OkHttp インターセプター。
@@ -22,14 +23,14 @@ class AuthInterceptor(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val accessToken = runBlocking { tokenPreferences.accessToken.first() }
-        val request = chain.request().withBearerToken(accessToken)
+        val request = chain.request().withAuth(accessToken)
         val response = chain.proceed(request)
 
         if (response.code == 401) {
             response.close()
             val refreshed = runBlocking { tryRefreshToken() }
             if (refreshed != null) {
-                return chain.proceed(chain.request().withBearerToken(refreshed))
+                return chain.proceed(chain.request().withAuth(refreshed))
             }
         }
         return response
@@ -45,6 +46,8 @@ class AuthInterceptor(
             val appType = tokenPreferences.appType.first()
             val refreshToken = tokenPreferences.refreshToken.first()
             val refreshTokenTtl = tokenPreferences.refreshTokenTtl.first()
+
+            Log.d("AuthInterceptor", "Attempting token refresh. baseUrl=$baseUrl, appType=$appType, refreshToken=${refreshToken.take(10)}...")
 
             // リフレッシュ用に interceptor なしの OkHttpClient を使用（無限ループ防止）
             val tempRetrofit = buildRetrofitWithoutAuth(baseUrl)
@@ -62,17 +65,27 @@ class AuthInterceptor(
                 tokenPreferences.saveAccessTokenTtl(tokenResponse.accessTokenTtl)
                 tokenResponse.refreshToken?.let { tokenPreferences.saveRefreshToken(it) }
                 tokenResponse.refreshTokenTtl?.let { tokenPreferences.saveRefreshTokenTtl(it) }
+                Log.d("AuthInterceptor", "Token refresh succeeded. New accessToken=${tokenResponse.accessToken.take(10)}...")
                 tokenResponse.accessToken
             } else {
+                Log.e("AuthInterceptor", "Token refresh failed: ${result.code()} ${result.errorBody()?.string()}")
                 null
             }
         } catch (e: Exception) {
+            Log.e("AuthInterceptor", "Token refresh exception: ${e.message}", e)
             null
         }
     }
 
-    private fun Request.withBearerToken(token: String): Request =
-        newBuilder().header("Authorization", "Bearer $token").build()
+    private fun Request.withAuth(token: String): Request {
+        val builder = newBuilder()
+            .header("Authorization", "Bearer $token")
+        // バイナリ取得エンドポイントには Accept: application/json を付けない
+        if (!url.encodedPath.contains("/binary")) {
+            builder.header("Accept", "application/json")
+        }
+        return builder.build()
+    }
 
     companion object {
         fun buildRetrofitWithoutAuth(baseUrl: String): Retrofit {

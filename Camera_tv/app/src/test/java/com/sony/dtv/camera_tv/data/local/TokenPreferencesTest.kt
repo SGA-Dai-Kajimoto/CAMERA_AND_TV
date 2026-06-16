@@ -62,14 +62,14 @@ class TokenPreferencesTest {
 
     @Test
     fun `default baseUrl is dev3`() = testScope.runTest {
-        assertEquals("https://ws.dev3.imagingedge.sony.net", tokenPreferences.baseUrl.first())
+        assertEquals(TokenPreferences.DEFAULT_BASE_URL, tokenPreferences.baseUrl.first())
     }
 
     @Test
     fun `initIfEmpty writes values only when not present`() = testScope.runTest {
         // 1回目: 書き込まれる
         tokenPreferences.initIfEmpty(
-            baseUrl = "https://ws.dev3.imagingedge.sony.net",
+            baseUrl = TokenPreferences.DEFAULT_BASE_URL,
             appType = "_trial_",
             accessToken = "token_A",
             accessTokenTtl = 3600L,
@@ -80,7 +80,7 @@ class TokenPreferencesTest {
 
         // 2回目: 上書きされない
         tokenPreferences.initIfEmpty(
-            baseUrl = "https://ws.dev3.imagingedge.sony.net",
+            baseUrl = TokenPreferences.DEFAULT_BASE_URL,
             appType = "_trial_",
             accessToken = "token_B",
             accessTokenTtl = 3600L,

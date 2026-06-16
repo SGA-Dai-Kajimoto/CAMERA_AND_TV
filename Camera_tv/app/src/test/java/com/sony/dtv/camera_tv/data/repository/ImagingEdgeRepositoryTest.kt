@@ -33,7 +33,7 @@ class ImagingEdgeRepositoryTest {
         every { tokenPrefs.userId } returns flowOf("user123")
         every { tokenPrefs.account } returns flowOf("account123")
         every { tokenPrefs.appType } returns flowOf("_trial_")
-        every { tokenPrefs.baseUrl } returns flowOf("https://ws.dev3.imagingedge.sony.net")
+        every { tokenPrefs.baseUrl } returns flowOf(TokenPreferences.DEFAULT_BASE_URL)
         repository = ImagingEdgeRepository(api, tokenPrefs)
     }
 

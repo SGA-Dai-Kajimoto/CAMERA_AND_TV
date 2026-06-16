@@ -8,14 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import com.sony.dtv.camera_tv.data.local.TokenPreferences
 import com.sony.dtv.camera_tv.data.remote.AuthInterceptor
 import com.sony.dtv.camera_tv.data.remote.ImagingEdgeApi
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
-import com.sony.dtv.camera_tv.ui.folderlist.FolderListScreen
 import com.sony.dtv.camera_tv.ui.slideshow.SlideshowScreen
 import com.sony.dtv.camera_tv.ui.theme.CameraTvTheme
 import kotlinx.coroutines.flow.first
@@ -30,6 +26,19 @@ class MainActivity : ComponentActivity() {
     // Repository を Activity スコープで一度だけ生成
     private val repository: ImagingEdgeRepository by lazy {
         val tokenPrefs = TokenPreferences.create(applicationContext)
+
+        // local.properties のトークンを DataStore に初期注入（未設定時のみ）
+        runBlocking {
+            tokenPrefs.initIfEmpty(
+                baseUrl = BuildConfig.DEV_BASE_URL.ifEmpty { TokenPreferences.DEFAULT_BASE_URL },
+                appType = TokenPreferences.DEFAULT_APP_TYPE,
+                accessToken = BuildConfig.DEV_ACCESS_TOKEN,
+                accessTokenTtl = 3600L,
+                refreshToken = BuildConfig.DEV_REFRESH_TOKEN,
+                refreshTokenTtl = 86400L,
+            )
+        }
+
         val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor(tokenPrefs))
@@ -64,24 +73,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun CameraTvNavGraph(repository: ImagingEdgeRepository) {
-    val navController = rememberNavController()
-
-    NavHost(navController = navController, startDestination = "folderlist") {
-        composable("folderlist") {
-            FolderListScreen(
-                repository = repository,
-                onFolderSelected = { folderId ->
-                    navController.navigate("slideshow/$folderId")
-                },
-            )
-        }
-        composable("slideshow/{folderId}") { backStackEntry ->
-            val folderId = backStackEntry.arguments?.getString("folderId") ?: return@composable
-            SlideshowScreen(
-                folderId = folderId,
-                repository = repository,
-                onBack = { navController.popBackStack() },
-            )
-        }
-    }
+    SlideshowScreen(
+        repository = repository,
+    )
 }

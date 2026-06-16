@@ -27,15 +27,15 @@ data class SlideshowUiState(
     val availableDates: List<LocalDate> = emptyList(),
     val selectedDate: LocalDate? = null,
     val currentIndex: Int = 0,
-    val isPlaying: Boolean = true,
+    val isPlaying: Boolean = false,
     val currentImageBytes: ByteArray? = null,
     val isImageLoading: Boolean = false,
     val error: String? = null,
+    val thumbnails: Map<String, ByteArray> = emptyMap(),
 )
 
 class SlideshowViewModel(
     private val repository: ImagingEdgeRepository,
-    private val folderId: String,
     private val externalScope: CoroutineScope? = null,
 ) : ViewModel() {
 
@@ -45,7 +45,8 @@ class SlideshowViewModel(
     val uiState: StateFlow<SlideshowUiState> = _uiState.asStateFlow()
 
     private var autoAdvanceJob: Job? = null
-    private var lastItem: String? = null
+    private var imageLoadJob: Job? = null
+    private var loadedContentId: String? = null
 
     init {
         loadContents()
@@ -54,10 +55,8 @@ class SlideshowViewModel(
     fun loadContents() {
         scope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            repository.listContentsPaged(folderId)
-                .onSuccess { response ->
-                    lastItem = response.lastItem
-                    val contents = response.contents
+            repository.listAllContents()
+                .onSuccess { contents ->
                     val grouped = groupByDate(contents)
                     val dates = extractAvailableDates(contents)
                     val latestDate = dates.firstOrNull()
@@ -73,7 +72,6 @@ class SlideshowViewModel(
                     }
                     if (contents.isNotEmpty()) {
                         loadCurrentImage()
-                        startAutoAdvance()
                     }
                 }
                 .onFailure { e ->
@@ -83,26 +81,7 @@ class SlideshowViewModel(
     }
 
     fun loadMoreContents() {
-        val startFrom = lastItem ?: return
-        scope.launch {
-            repository.listContentsPaged(folderId, startFrom = startFrom)
-                .onSuccess { response ->
-                    lastItem = response.lastItem
-                    val allContents = _uiState.value.contents + response.contents
-                    val grouped = groupByDate(allContents)
-                    val dates = extractAvailableDates(allContents)
-                    _uiState.update {
-                        it.copy(
-                            contents = allContents,
-                            groupedItems = grouped,
-                            availableDates = dates,
-                        )
-                    }
-                }
-                .onFailure { e ->
-                    _uiState.update { it.copy(error = e.message) }
-                }
-        }
+        // All contents are loaded at once from all folders; no pagination needed.
     }
 
     fun selectDate(date: LocalDate) {
@@ -152,6 +131,37 @@ class SlideshowViewModel(
     }
 
     /**
+     * 現在の日付グループのサムネイルを読み込む。
+     */
+    fun loadThumbnails() {
+        val dateContents = currentDateContents()
+        if (dateContents.isEmpty()) return
+        scope.launch {
+            val currentThumbs = _uiState.value.thumbnails.toMutableMap()
+            for (content in dateContents) {
+                if (currentThumbs.containsKey(content.contentId)) continue
+                repository.getContentBinary(content.folderId, content.contentId, kind = "proxy")
+                    .onSuccess { bytes ->
+                        currentThumbs[content.contentId] = bytes
+                        _uiState.update { it.copy(thumbnails = currentThumbs.toMap()) }
+                    }
+            }
+        }
+    }
+
+    /**
+     * 指定インデックスのコンテンツに移動する。
+     */
+    fun selectIndex(index: Int) {
+        val dateContents = currentDateContents()
+        if (dateContents.isEmpty()) return
+        val newIndex = index.coerceIn(0, dateContents.size - 1)
+        _uiState.update { it.copy(currentIndex = newIndex, currentImageBytes = null) }
+        loadCurrentImage()
+        restartAutoAdvance()
+    }
+
+    /**
      * 現在表示中のコンテンツにお気に入りタグを付与する。
      */
     fun toggleFavorite() {
@@ -161,7 +171,7 @@ class SlideshowViewModel(
         val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
         val content = dateContents[index]
         scope.launch {
-            repository.setContentTags(folderId, content.contentId, listOf("favorite:1"))
+            repository.setContentTags(content.folderId, content.contentId, listOf("favorite:1"))
                 .onFailure { e ->
                     _uiState.update { it.copy(error = e.message) }
                 }
@@ -178,7 +188,7 @@ class SlideshowViewModel(
         val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
         val content = dateContents[index]
         scope.launch {
-            repository.removeContents(folderId, listOf(content.contentId))
+            repository.removeContents(content.folderId, listOf(content.contentId))
                 .onSuccess {
                     // 削除後にコンテンツリストを再構築
                     val newContents = state.contents.filter { it.contentId != content.contentId }
@@ -270,13 +280,19 @@ class SlideshowViewModel(
         val state = _uiState.value
         val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
         val content = dateContents[index]
-        scope.launch {
+        // Skip if already loaded or loading the same content
+        if (content.contentId == loadedContentId && state.currentImageBytes != null) return
+        imageLoadJob?.cancel()
+        imageLoadJob = scope.launch {
             _uiState.update { it.copy(isImageLoading = true) }
-            repository.getContentBinary(folderId, content.contentId)
+            repository.getContentBinary(content.folderId, content.contentId, kind = "original")
                 .onSuccess { bytes ->
+                    android.util.Log.d("SlideshowVM", "Image loaded: ${bytes.size} bytes, contentId=${content.contentId}")
+                    loadedContentId = content.contentId
                     _uiState.update { it.copy(isImageLoading = false, currentImageBytes = bytes) }
                 }
                 .onFailure { e ->
+                    android.util.Log.e("SlideshowVM", "Image load failed: ${e.message}")
                     _uiState.update { it.copy(isImageLoading = false, error = e.message) }
                 }
         }
@@ -317,9 +333,8 @@ class SlideshowViewModel(
 
         fun factory(
             repository: ImagingEdgeRepository,
-            folderId: String,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { SlideshowViewModel(repository, folderId) }
+            initializer { SlideshowViewModel(repository) }
         }
     }
 }

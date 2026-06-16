@@ -20,7 +20,7 @@ import retrofit2.http.Streaming
 interface ImagingEdgeApi {
 
     @POST("api/v1/oauth2/token")
-    suspend fun refreshToken(@Body body: Map<String, Any>): Response<TokenResponse>
+    suspend fun refreshToken(@Body body: Map<String, @JvmSuppressWildcards Any>): Response<TokenResponse>
 
     @GET("api/v1/user/me")
     suspend fun getUserMe(): Response<Map<String, Any>>

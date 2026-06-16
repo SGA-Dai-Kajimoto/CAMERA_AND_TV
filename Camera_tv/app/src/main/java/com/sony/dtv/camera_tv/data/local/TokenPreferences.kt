@@ -55,8 +55,8 @@ class TokenPreferences(private val dataStore: DataStore<Preferences>) {
     suspend fun saveAccount(value: String) { dataStore.edit { it[KEY_ACCOUNT] = value } }
 
     /**
-     * 認証情報を一括で書き込む。既に値があれば上書きしない。
-     * PoC の auth_info.json から初期値をロードする際に使用する。
+     * 認証情報を一括で書き込む。
+     * BuildConfig から毎回最新のトークンを注入する。
      */
     suspend fun initIfEmpty(
         baseUrl: String,
@@ -67,12 +67,12 @@ class TokenPreferences(private val dataStore: DataStore<Preferences>) {
         refreshTokenTtl: Long,
     ) {
         dataStore.edit { prefs ->
-            if (!prefs.contains(KEY_BASE_URL)) prefs[KEY_BASE_URL] = baseUrl
-            if (!prefs.contains(KEY_APP_TYPE)) prefs[KEY_APP_TYPE] = appType
-            if (!prefs.contains(KEY_ACCESS_TOKEN)) prefs[KEY_ACCESS_TOKEN] = accessToken
-            if (!prefs.contains(KEY_ACCESS_TOKEN_TTL)) prefs[KEY_ACCESS_TOKEN_TTL] = accessTokenTtl
-            if (!prefs.contains(KEY_REFRESH_TOKEN)) prefs[KEY_REFRESH_TOKEN] = refreshToken
-            if (!prefs.contains(KEY_REFRESH_TOKEN_TTL)) prefs[KEY_REFRESH_TOKEN_TTL] = refreshTokenTtl
+            prefs[KEY_BASE_URL] = baseUrl
+            prefs[KEY_APP_TYPE] = appType
+            if (accessToken.isNotEmpty()) prefs[KEY_ACCESS_TOKEN] = accessToken
+            if (accessTokenTtl > 0) prefs[KEY_ACCESS_TOKEN_TTL] = accessTokenTtl
+            if (refreshToken.isNotEmpty()) prefs[KEY_REFRESH_TOKEN] = refreshToken
+            if (refreshTokenTtl > 0) prefs[KEY_REFRESH_TOKEN_TTL] = refreshTokenTtl
         }
     }
 }

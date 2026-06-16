@@ -5,6 +5,8 @@ import com.sony.dtv.camera_tv.data.model.Content
 import com.sony.dtv.camera_tv.data.model.Folder
 import com.sony.dtv.camera_tv.data.remote.ImagingEdgeApi
 import com.sony.dtv.camera_tv.data.remote.dto.ContentListResponse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import retrofit2.Response
 
 /**
@@ -70,6 +72,19 @@ class ImagingEdgeRepository(
         response.body()!!
     }
 
+    /**
+     * 全フォルダのコンテンツを一括取得する。
+     * 各 Content に folderId を付与して返す。
+     */
+    suspend fun listAllContents(): Result<List<Content>> = runCatching {
+        val folders = listFolders().getOrThrow()
+        folders.flatMap { folder ->
+            val response = api.listContents(folder.folderId, "updated_date_desc", 300, null)
+            response.requireSuccess()
+            response.body()!!.contents.map { it.copy(folderId = folder.folderId) }
+        }
+    }
+
     // ---------------------------------------------------------------- //
     // コンテンツバイナリ取得（スライドショー用）
     // ---------------------------------------------------------------- //
@@ -79,9 +94,13 @@ class ImagingEdgeRepository(
         contentId: String,
         kind: String = "original",
     ): Result<ByteArray> = runCatching {
-        val response = api.getContentBinary(folderId, contentId, kind)
-        response.requireSuccess()
-        response.body()!!.bytes()
+        withContext(Dispatchers.IO) {
+            val response = api.getContentBinary(folderId, contentId, kind)
+            response.requireSuccess()
+            val body = response.body()
+                ?: throw IllegalStateException("Response body is null for contentId=$contentId, kind=$kind")
+            body.bytes()
+        }
     }
 
     // ---------------------------------------------------------------- //

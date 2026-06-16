@@ -4,6 +4,14 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+import java.util.Properties
+
+// local.properties から dev トークンを読み込む
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use(::load)
+}
+
 android {
     namespace = "com.sony.dtv.camera_tv"
     compileSdk = 36
@@ -16,6 +24,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "DEV_BASE_URL", "\"${localProps.getProperty("dev.baseUrl", "")}\"")
+        buildConfigField("String", "DEV_ACCESS_TOKEN", "\"${localProps.getProperty("dev.accessToken", "")}\"")
+        buildConfigField("String", "DEV_REFRESH_TOKEN", "\"${localProps.getProperty("dev.refreshToken", "")}\"")
     }
 
     buildTypes {
@@ -36,6 +48,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
