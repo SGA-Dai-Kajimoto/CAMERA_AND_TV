@@ -5,12 +5,12 @@
 ApiClient を受け取り、各操作を Worker スレッド経由で非同期に実行する。
 """
 
-from pathlib import Path
-
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
+    QApplication,
     QDialog,
+    QDialogButtonBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -120,13 +121,15 @@ class MainWindow(QMainWindow):
     def _set_status(self, msg: str) -> None:
         self.status_bar.showMessage(msg)
 
-    def _run(self, func, *args, on_result=None, on_error=None, **kwargs) -> None:
+    def _run(self, func, *args, on_result=None, on_error=None, on_progress=None, **kwargs) -> None:
         """func をワーカースレッドで実行し、完了時に on_result / on_error を呼ぶ。"""
-        worker = Worker(func, *args, **kwargs)
+        worker = Worker(func, *args, emit_progress=on_progress is not None, **kwargs)
         if on_result:
             worker.result.connect(on_result)
         if on_error:
             worker.error.connect(on_error)
+        if on_progress:
+            worker.progress.connect(on_progress)
         worker.error.connect(self._default_error_handler)
         worker.finished.connect(
             lambda: self._workers.remove(worker) if worker in self._workers else None
@@ -136,7 +139,37 @@ class MainWindow(QMainWindow):
 
     def _default_error_handler(self, msg: str) -> None:
         self._set_status(f"エラー: {msg}")
-        QMessageBox.warning(self, "エラー", msg)
+        self._show_copyable_error("エラー", msg)
+
+    def _show_copyable_error(self, title: str, message: str) -> None:
+        """エラー内容を選択・コピー可能なテキスト欄付きダイアログで表示する。"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(600, 320)
+
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(QLabel("以下のエラー内容を選択してコピーできます:"))
+
+        text_edit = QPlainTextEdit(message)
+        text_edit.setReadOnly(True)
+        text_edit.setTextInteractionFlags(
+            Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+        )
+        text_edit.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        layout.addWidget(text_edit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Close)
+        copy_btn = buttons.addButton("クリップボードにコピー", QDialogButtonBox.ActionRole)
+
+        def copy_to_clipboard():
+            QApplication.clipboard().setText(message)
+            copy_btn.setText("コピーしました")
+
+        copy_btn.clicked.connect(copy_to_clipboard)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        dialog.exec_()
 
     def _set_buttons_enabled(self, enabled: bool) -> None:
         for btn in (
@@ -166,7 +199,9 @@ class MainWindow(QMainWindow):
         def on_error(msg):
             self._set_status(f"認証エラー: {msg}")
             self._set_buttons_enabled(True)
-            QMessageBox.critical(self, "認証エラー", f"ユーザー情報の取得に失敗しました。\n\n{msg}")
+            self._show_copyable_error(
+                "認証エラー", f"ユーザー情報の取得に失敗しました。\n\n{msg}"
+            )
 
         self._run(self.client.get_user_me, on_result=on_result, on_error=on_error)
 
@@ -274,22 +309,42 @@ class MainWindow(QMainWindow):
         if not self.current_folder_id:
             QMessageBox.information(self, "情報", "アップロード先のフォルダを選択してください。")
             return
-        file_path, _ = QFileDialog.getOpenFileName(
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "アップロードする画像を選択",
+            "アップロードする画像を選択（複数選択可）",
             "",
-            "画像ファイル (*.jpg *.jpeg *.png *.raw *.arw *.tiff *.tif)",
+            "画像ファイル (*.jpg *.jpeg *.png *.heif *.heic *.raw *.arw *.tiff *.tif)",
         )
-        if not file_path:
+        if not file_paths:
             return
-        self._set_status(f"アップロード中: {Path(file_path).name} ...")
+        total = len(file_paths)
+        self._set_status(f"アップロード中: 0/{total} ...")
         folder_id = self.current_folder_id
 
-        def on_result(_):
-            self._set_status("アップロード完了")
+        def on_progress(index, count, name):
+            self._set_status(f"アップロード中: {index}/{count} {name} ...")
+
+        def on_result(summary):
+            succeeded = summary.get("succeeded", [])
+            failed = summary.get("failed", [])
+            if failed:
+                detail = "\n".join(f"・{name}: {msg}" for name, msg in failed)
+                self._set_status(f"アップロード完了: 成功 {len(succeeded)} / 失敗 {len(failed)}")
+                self._show_copyable_error(
+                    "一部失敗",
+                    f"{len(failed)} 件のアップロードに失敗しました。\n\n{detail}",
+                )
+            else:
+                self._set_status(f"アップロード完了: {len(succeeded)} 件")
             self._load_contents(folder_id)
 
-        self._run(self.client.upload_image, folder_id, Path(file_path), on_result=on_result)
+        self._run(
+            self.client.upload_images,
+            folder_id,
+            file_paths,
+            on_progress=on_progress,
+            on_result=on_result,
+        )
 
     def _view_content(self) -> None:
         item = self.content_list.currentItem()

@@ -29,7 +29,7 @@ class TokenPreferences(private val dataStore: DataStore<Preferences>) {
         private val KEY_USER_ID = stringPreferencesKey("user_id")
         private val KEY_ACCOUNT = stringPreferencesKey("account")
 
-        const val DEFAULT_BASE_URL = "https://ws.dev3.imagingedge.sony.net"
+        const val DEFAULT_BASE_URL = "https://w.dev3.imagingedge.sony.net"
         const val DEFAULT_APP_TYPE = "_trial_"
 
         /** Context から TokenPreferences を生成するファクトリ */

@@ -7,6 +7,7 @@ Imaging Edge API クライアント。
 """
 
 import datetime
+import tempfile
 import time
 from pathlib import Path
 
@@ -169,51 +170,165 @@ class ApiClient:
     #  画像アップロード
     # ---------------------------------------------------------------- #
 
+    # 拡張子 → MIME タイプ。バイナリ PUT の Content-Type ヘッダに使用する。
+    #   動作実績のある Android 実装と完全一致させる（jpg/jpeg/png/arw のみマップ、
+    #   HEIF/HEIC/TIFF/RAW を含むそれ以外は application/octet-stream）。
+    _CONTENT_TYPES = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".arw": "image/x-sony-arw",
+    }
+
+    @classmethod
+    def _guess_content_type(cls, file_path: Path) -> str:
+        """拡張子から MIME タイプを推測する。不明な場合は octet-stream。"""
+        return cls._CONTENT_TYPES.get(file_path.suffix.lower(), "application/octet-stream")
+
+    # HEIF/HEIC はサーバー側のサムネイル生成が失敗し 601006 になるため、
+    # アップロード前にクライアント側で JPEG に変換する。
+    _HEIF_SUFFIXES = {".heif", ".heic"}
+
+    @classmethod
+    def _convert_heif_to_jpeg(cls, file_path: Path) -> Path:
+        """
+        HEIF/HEIC を一時 JPEG ファイルに変換し、そのパスを返す。
+        撮影日時の自動抽出のため Exif を可能な範囲で引き継ぐ。
+        呼び出し側は使用後に返り値のファイルを削除すること。
+        """
+        try:
+            import pillow_heif
+            from PIL import Image
+        except ImportError as exc:  # noqa: BLE001
+            raise RuntimeError(
+                "HEIF の変換には pillow と pillow-heif が必要です。"
+                "`pip install pillow pillow-heif` を実行してください。"
+            ) from exc
+
+        # 一部の Sony HEIF は ispe(画像サイズ)と HEVC デコード結果のサイズが
+        # 一致せず、新しい libheif の厳格チェックで「Invalid image size」エラーに
+        # なる。pillow-heif==0.22.0(libheif 1.19.7)は許容するため、そのバージョンに
+        # 固定している(requirements.txt 参照)。
+        pillow_heif.register_heif_opener()
+
+        with Image.open(file_path) as img:
+            exif = img.info.get("exif")
+            rgb = img.convert("RGB")
+            tmp = tempfile.NamedTemporaryFile(
+                suffix=".jpg", prefix=f"{file_path.stem}_", delete=False
+            )
+            tmp_path = Path(tmp.name)
+            tmp.close()
+            save_kwargs = {"quality": 95}
+            if exif:
+                save_kwargs["exif"] = exif
+            rgb.save(tmp_path, "JPEG", **save_kwargs)
+        return tmp_path
+
     def upload_image(self, folder_id: str, file_path: Path) -> dict:
         """
         3ステップのアップロードフロー:
           [1] POST /api/v1/folders/{folder_id}/upload  → upload_id / upload_url 取得
           [2] PUT <upload_url> にバイナリ送信
           [3] POST /api/v1/folders/{folder_id}/contents でフォルダへ登録
+
+        HEIF/HEIC はサーバー側のサムネイル生成が失敗（601006）するため、
+        アップロード前に JPEG へ変換し、JPEG として登録する。
         """
-        file_size = file_path.stat().st_size
+        is_heif = file_path.suffix.lower() in self._HEIF_SUFFIXES
+        upload_path = self._convert_heif_to_jpeg(file_path) if is_heif else file_path
+        upload_name = file_path.with_suffix(".jpg").name if is_heif else file_path.name
+        try:
+            file_size = upload_path.stat().st_size
+            content_type = self._guess_content_type(upload_path)
 
-        # [1] アップロードセッション開始
-        resp = self._request(
-            "POST",
-            f"/api/v1/folders/{folder_id}/upload",
-            json={"name": file_path.name, "target": "content/original/image"},
-        )
-        resp.raise_for_status()
-        session = resp.json()
-        upload_id = session.get("upload_id")
-        upload_url = session.get("upload_url")
-
-        if not upload_url:
-            raise ValueError(f"upload_url が取得できませんでした。レスポンス: {session}")
-
-        # [2] ファイルをアップロード
-        with open(file_path, "rb") as f:
-            put_resp = requests.put(upload_url, data=f, timeout=120)
-            put_resp.raise_for_status()
-
-        # [3] フォルダへコンテンツ登録（wait_time で処理待ち、425 時はリトライ）
-        for attempt in range(4):
-            reg_resp = self._request(
+            # [1] アップロードセッション開始
+            resp = self._request(
                 "POST",
-                f"/api/v1/folders/{folder_id}/contents",
-                params={"wait_time": "10s"},
-                json={
-                    "upload_id": upload_id,
-                    "kind": "original",
-                    "name": file_path.name,
-                    "bytes": file_size,
-                    "utc_offset": self._utc_offset(),
-                },
+                f"/api/v1/folders/{folder_id}/upload",
+                json={"name": upload_name, "target": "content/original/image"},
             )
-            if reg_resp.status_code != 425:
-                break
-            if attempt < 3:
+            resp.raise_for_status()
+            session = resp.json()
+            upload_id = session.get("upload_id")
+            upload_url = session.get("upload_url")
+
+            if not upload_url:
+                raise ValueError(f"upload_url が取得できませんでした。レスポンス: {session}")
+
+            # [2] ファイルをアップロード。
+            #   サーバーはアップロードされたオブジェクトの Content-Type でファイル種別を判定するため、
+            #   PUT に Content-Type ヘッダを必ず付ける（未指定だと 601006: upload process failed になる）。
+            with open(upload_path, "rb") as f:
+                put_resp = requests.put(
+                    upload_url,
+                    data=f,
+                    headers={"Content-Type": content_type},
+                    timeout=120,
+                )
+                put_resp.raise_for_status()
+
+            # [3] フォルダへコンテンツ登録
+            #   動作実績のある Android 実装と完全一致させる（wait_time=10s, 425 で最大3回リトライ）。
+            #   ファイル種別は name の拡張子と PUT の Content-Type からサーバーが判定するため、
+            #   content_type はここでは送らない。
+            body = {
+                "upload_id": upload_id,
+                "kind": "original",
+                "name": upload_name,
+                "bytes": file_size,
+                "utc_offset": self._utc_offset(),
+            }
+
+            reg_resp = None
+            for attempt in range(4):
+                reg_resp = self._request(
+                    "POST",
+                    f"/api/v1/folders/{folder_id}/contents",
+                    params={"wait_time": "10s"},
+                    json=body,
+                )
+                if reg_resp.status_code != 425:
+                    break
                 time.sleep(3)
-        reg_resp.raise_for_status()
-        return reg_resp.json()
+
+            if reg_resp.status_code >= 400:
+                self._raise_with_body(reg_resp, "コンテンツ登録に失敗しました")
+            return reg_resp.json()
+        finally:
+            # 変換で作成した一時 JPEG を削除する。
+            if is_heif and upload_path != file_path:
+                upload_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _raise_with_body(resp: requests.Response, context: str) -> None:
+        """HTTP エラーをサーバーのレスポンス本文付きで送出する。"""
+        try:
+            detail = resp.text
+        except Exception:  # noqa: BLE001
+            detail = ""
+        raise requests.HTTPError(
+            f"{context}: {resp.status_code} {resp.reason}\nURL: {resp.url}\n{detail}".strip(),
+            response=resp,
+        )
+
+    def upload_images(self, folder_id: str, file_paths, progress=None) -> dict:
+        """
+        複数ファイルを順次アップロードする。
+
+        API にバッチアップロードは無いため、各ファイルを upload_image で1枚ずつ送信する。
+        progress(index, total, name) が指定された場合、各ファイル送信前に呼び出す。
+        戻り値: {"succeeded": [...], "failed": [(name, error_msg), ...]}
+        """
+        paths = [Path(p) for p in file_paths]
+        total = len(paths)
+        succeeded = []
+        failed = []
+        for index, path in enumerate(paths, start=1):
+            if progress is not None:
+                progress(index, total, path.name)
+            try:
+                succeeded.append(self.upload_image(folder_id, path))
+            except Exception as exc:  # noqa: BLE001
+                failed.append((path.name, str(exc)))
+        return {"succeeded": succeeded, "failed": failed}

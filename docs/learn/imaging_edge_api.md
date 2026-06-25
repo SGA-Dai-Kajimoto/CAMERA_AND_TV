@@ -22,6 +22,17 @@
 - `wait_time` クエリパラメータ（デフォルト `"0s"`、最大 `"10s"`）を付けるとサーバーが処理完了を待ってからレスポンスする。
 - `wait_time=10s` でも 425 Too Early が返る場合がある。数秒待ってリトライすること。
 - リクエストボディに必須: `upload_id`, `kind`, `name`, `bytes`, `utc_offset`。
+- `content_type`（任意）で MIME を明示できる。指定した値が優先される。
+
+### 対応フォーマット / HEIF
+- HEIF は対応。`GET .../contents/{content_id}/metadata` の `kind` に `image_heif_meta`（HEIF専用メタデータ）が定義されている。`image_raw_meta` / `image_arq_meta` もあり RAW/ARQ も解析対象。
+- アップロード時は `name` の拡張子（例 `.heif` / `.heic`）と `content_type` がサムネイル生成・メタデータ解析の判定に使われる。
+
+### 複数枚アップロード（バッチ可否）
+- アップロードの一括APIは無い。`upload`→`PUT`→`contents` の3ステップを1ファイルずつ実行する。
+- 一括系が存在するのはダウンロード（`POST /api/v1/cms/contents:download`）・コピー（`contents:copy` 最大100件）・削除（`contents:remove` 最大1000件）・trash（最大100件）のみ。
+- `contents/{content_id}/resources/{kind}/uploads`（multipart upload）は「1ファイルを分割送信」であり複数ファイルの一括ではない。
+- → GUI 側で複数選択し順次アップロードするのが正しい方式。
 
 ### コンテンツ削除
 - `DELETE /api/v1/folders/{folder_id}/contents/{content_id}` は存在しない。

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,6 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.border
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -146,6 +151,8 @@ fun SlideshowScreen(
                                 screenMode = ScreenMode.Photo
                             },
                             onDelete = { showDeleteConfirm = true },
+                            onShare = { viewModel.requestShareUrl() },
+                            onOpenGallery = { screenMode = ScreenMode.Gallery },
                             onDismiss = { screenMode = ScreenMode.Photo },
                         )
                         if (showDeleteConfirm) {
@@ -161,6 +168,13 @@ fun SlideshowScreen(
                                 },
                             )
                         }
+                        if (uiState.shareUrl != null || uiState.isShareLoading) {
+                            ShareOverlay(
+                                url = uiState.shareUrl,
+                                isLoading = uiState.isShareLoading,
+                                onClose = { viewModel.clearShareUrl() },
+                            )
+                        }
                     }
 
                     ScreenMode.DateSelect -> {
@@ -169,6 +183,18 @@ fun SlideshowScreen(
                             selectedDate = uiState.selectedDate,
                             onDateSelected = { date ->
                                 viewModel.selectDate(date)
+                                screenMode = ScreenMode.Photo
+                            },
+                            onBack = { screenMode = ScreenMode.Menu },
+                        )
+                    }
+
+                    ScreenMode.Gallery -> {
+                        GalleryScreen(
+                            uiState = uiState,
+                            viewModel = viewModel,
+                            onSelect = { index ->
+                                viewModel.selectIndex(index)
                                 screenMode = ScreenMode.Photo
                             },
                             onBack = { screenMode = ScreenMode.Menu },
@@ -197,7 +223,7 @@ fun SlideshowScreen(
     }
 }
 
-private enum class ScreenMode { Photo, Menu, DateSelect }
+private enum class ScreenMode { Photo, Menu, DateSelect, Gallery }
 
 // ============================================================
 // Screen 1: Fullscreen photo display
@@ -300,6 +326,8 @@ private fun MenuOverlay(
     onDateSelect: () -> Unit,
     onFavorite: () -> Unit,
     onDelete: () -> Unit,
+    onShare: () -> Unit,
+    onOpenGallery: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     // 0=buttons area, 1=thumbnail strip
@@ -343,7 +371,7 @@ private fun MenuOverlay(
                         }
                         Key.DirectionRight -> {
                             if (focusArea == 0) {
-                                buttonIndex = (buttonIndex + 1).coerceAtMost(2)
+                                buttonIndex = (buttonIndex + 1).coerceAtMost(3)
                             } else {
                                 thumbIndex = (thumbIndex + 1).coerceAtMost(dateContents.size - 1)
                             }
@@ -353,6 +381,9 @@ private fun MenuOverlay(
                             if (focusArea == 0) {
                                 focusArea = 1
                                 thumbIndex = uiState.currentIndex.coerceIn(0, dateContents.size - 1)
+                            } else {
+                                // サムネイル帯でさらに下 → 全画面ギャラリーへ
+                                onOpenGallery()
                             }
                             true
                         }
@@ -370,6 +401,7 @@ private fun MenuOverlay(
                                     0 -> onDateSelect()
                                     1 -> onFavorite()
                                     2 -> onDelete()
+                                    3 -> onShare()
                                 }
                             } else {
                                 // Select thumbnail → jump to that image
@@ -404,6 +436,8 @@ private fun MenuOverlay(
                 MenuButton(label = "Favorite", isFocused = focusArea == 0 && buttonIndex == 1, onClick = onFavorite)
                 Spacer(modifier = Modifier.width(24.dp))
                 MenuButton(label = "Delete", isFocused = focusArea == 0 && buttonIndex == 2, onClick = onDelete)
+                Spacer(modifier = Modifier.width(24.dp))
+                MenuButton(label = "Share", isFocused = focusArea == 0 && buttonIndex == 3, onClick = onShare)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -435,25 +469,7 @@ private fun MenuOverlay(
                             .background(Color.DarkGray),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (thumbBytes != null) {
-                            val bitmap = remember(thumbBytes) {
-                                BitmapFactory.decodeByteArray(thumbBytes, 0, thumbBytes.size)
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = "Thumbnail ${index + 1}",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-                        } else {
-                            Text(
-                                text = "${index + 1}",
-                                color = Color.Gray,
-                                fontSize = 12.sp,
-                            )
-                        }
+                        ThumbnailInner(bytes = thumbBytes, index = index, reqPx = 160)
                     }
                 }
             }
@@ -476,6 +492,182 @@ private fun MenuButton(
         modifier = Modifier.height(48.dp),
     ) {
         Text(text = label, fontSize = 16.sp)
+    }
+}
+
+// ============================================================
+// Screen 3: Fullscreen thumbnail gallery (grid)
+// ============================================================
+
+@Composable
+private fun GalleryScreen(
+    uiState: SlideshowUiState,
+    viewModel: SlideshowViewModel,
+    onSelect: (index: Int) -> Unit,
+    onBack: () -> Unit,
+) {
+    val dateContents = viewModel.currentDateContents()
+
+    // 列数（少ない=大きいサムネイル / 多い=小さいサムネイル）
+    var columns by remember { mutableIntStateOf(5) }
+    var selectedIndex by remember { mutableIntStateOf(uiState.currentIndex.coerceIn(0, (dateContents.size - 1).coerceAtLeast(0))) }
+    val gridState = rememberLazyGridState()
+    val galleryFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        viewModel.loadThumbnails()
+        try { galleryFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
+
+    // 選択位置・列数が変わったらスクロール追従
+    LaunchedEffect(selectedIndex, columns) {
+        if (dateContents.isNotEmpty()) {
+            gridState.animateScrollToItem(selectedIndex.coerceIn(0, dateContents.size - 1))
+        }
+    }
+
+    // 列数からセルの必要解像度を概算（メモリ節約のためダウンサンプル）
+    val reqPx = (1600 / columns).coerceIn(120, 480)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .focusRequester(galleryFocusRequester)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val size = dateContents.size
+                if (size == 0) {
+                    if (keyEvent.key == Key.Back || keyEvent.key == Key.DirectionUp) { onBack(); return@onKeyEvent true }
+                    return@onKeyEvent false
+                }
+                when (keyEvent.key) {
+                    Key.DirectionLeft -> { selectedIndex = (selectedIndex - 1).coerceAtLeast(0); true }
+                    Key.DirectionRight -> { selectedIndex = (selectedIndex + 1).coerceAtMost(size - 1); true }
+                    Key.DirectionUp -> {
+                        if (selectedIndex < columns) {
+                            onBack()
+                        } else {
+                            selectedIndex = (selectedIndex - columns).coerceAtLeast(0)
+                        }
+                        true
+                    }
+                    Key.DirectionDown -> {
+                        selectedIndex = (selectedIndex + columns).coerceAtMost(size - 1)
+                        true
+                    }
+                    // CH+ : サムネイルを大きく（列を減らす）
+                    Key.ChannelUp -> { columns = (columns - 1).coerceAtLeast(MIN_GALLERY_COLUMNS); true }
+                    // CH- : サムネイルを小さく（列を増やす）
+                    Key.ChannelDown -> { columns = (columns + 1).coerceAtMost(MAX_GALLERY_COLUMNS); true }
+                    Key.Enter, Key.DirectionCenter -> { onSelect(selectedIndex); true }
+                    Key.Back -> { onBack(); true }
+                    else -> false
+                }
+            },
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ヘッダー（操作ヒント + 件数）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "${selectedIndex + 1} / ${dateContents.size}",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                )
+                Text(
+                    text = "CH+/− : サイズ変更   決定 : 表示   戻る : メニュー",
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 14.sp,
+                )
+            }
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                state = gridState,
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+            ) {
+                gridItemsIndexed(dateContents) { index, content ->
+                    val isSelected = index == selectedIndex
+                    val isCurrent = index == uiState.currentIndex
+                    Box(
+                        modifier = Modifier
+                            .aspectRatio(1f)
+                            .border(
+                                width = if (isSelected) 4.dp else if (isCurrent) 2.dp else 0.dp,
+                                color = when {
+                                    isSelected -> Color.White
+                                    isCurrent -> Color(0xFF4488FF)
+                                    else -> Color.Transparent
+                                },
+                            )
+                            .background(Color.DarkGray),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ThumbnailInner(
+                            bytes = uiState.thumbnails[content.contentId],
+                            index = index,
+                            reqPx = reqPx,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private const val MIN_GALLERY_COLUMNS = 3
+private const val MAX_GALLERY_COLUMNS = 8
+
+/**
+ * サムネイル1枚の中身を描画する。
+ * バイトがあればダウンサンプルしてデコードし画像表示、無ければ番号を表示する。
+ */
+@Composable
+private fun ThumbnailInner(bytes: ByteArray?, index: Int, reqPx: Int) {
+    if (bytes != null) {
+        val bitmap = remember(bytes, reqPx) { decodeSampledBitmap(bytes, reqPx) }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = "Thumbnail ${index + 1}",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            return
+        }
+    }
+    Text(
+        text = "${index + 1}",
+        color = Color.Gray,
+        fontSize = 12.sp,
+    )
+}
+
+/**
+ * メモリ節約のため、要求サイズ(reqPx)に合わせて inSampleSize でダウンサンプルしてデコードする。
+ */
+private fun decodeSampledBitmap(bytes: ByteArray, reqPx: Int): android.graphics.Bitmap? {
+    return try {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        val maxDim = maxOf(bounds.outWidth, bounds.outHeight)
+        while (maxDim > 0 && maxDim / sample > reqPx) sample *= 2
+        val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+    } catch (_: Exception) {
+        null
     }
 }
 
@@ -547,6 +739,111 @@ private fun DeleteConfirmOverlay(
                 }
             }
         }
+    }
+}
+
+// ============================================================
+// Share overlay (QR code)
+// ============================================================
+
+/**
+ * 共有用QRコードを表示するオーバーレイ。
+ * download_url（事前署名済み・有効期限600秒）をQR化し、スマホで読み取ってダウンロードできる。
+ */
+@Composable
+private fun ShareOverlay(
+    url: String?,
+    isLoading: Boolean,
+    onClose: () -> Unit,
+) {
+    val shareFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        try { shareFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f))
+            .focusRequester(shareFocusRequester)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    when (keyEvent.key) {
+                        Key.Back, Key.Enter, Key.DirectionCenter -> { onClose(); true }
+                        else -> false
+                    }
+                } else false
+            },
+    ) {
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = "スマホで読み取って画像をダウンロード",
+                color = Color.White,
+                fontSize = 20.sp,
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+
+            val qrBitmap = remember(url) { url?.let { generateQrBitmap(it, 600) } }
+            Box(
+                modifier = Modifier
+                    .size(360.dp)
+                    .background(Color.White)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    isLoading -> CircularProgressIndicator(color = Color.Black)
+                    qrBitmap != null -> Image(
+                        bitmap = qrBitmap.asImageBitmap(),
+                        contentDescription = "Share QR code",
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    else -> Text(
+                        text = "QRコードを生成できませんでした",
+                        color = Color.Black,
+                        fontSize = 14.sp,
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "URLの有効期限は約10分です   決定/戻る : 閉じる",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 14.sp,
+            )
+        }
+    }
+}
+
+/**
+ * 文字列から QR コードの Bitmap を生成する（ZXing、オフライン動作）。
+ */
+private fun generateQrBitmap(text: String, sizePx: Int): android.graphics.Bitmap? {
+    return try {
+        val hints = mapOf(com.google.zxing.EncodeHintType.MARGIN to 1)
+        val matrix = com.google.zxing.qrcode.QRCodeWriter()
+            .encode(text, com.google.zxing.BarcodeFormat.QR_CODE, sizePx, sizePx, hints)
+        val width = matrix.width
+        val height = matrix.height
+        val pixels = IntArray(width * height)
+        for (y in 0 until height) {
+            val offset = y * width
+            for (x in 0 until width) {
+                pixels[offset + x] =
+                    if (matrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+            }
+        }
+        android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            setPixels(pixels, 0, width, 0, 0, width, height)
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 

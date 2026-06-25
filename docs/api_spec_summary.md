@@ -149,6 +149,69 @@
 | `kind` | リソース種別。例: `"original"`, `"proxy"`, `"thumbnail_1920"` |
 
 **レスポンス（200）**: コンテンツのバイナリデータ（Content-Type: image/jpeg など）
+※ 実際は 303 See Other でストレージの実URLへリダイレクトされる。`Authorization: Bearer` ヘッダーが必要。
+
+### GET /api/v1/folders/{folder_id}/contents/{content_id}/resources/{kind}/download_url（コンテンツのダウンロードURL取得）★共有・QRに使用
+
+コンテンツを **直接ダウンロードできる事前署名済みURL** を取得する。バイナリそのものではなく URL（文字列）を返すため、TV からスマホへ QR コードで共有する用途に最適。
+
+パスパラメータ:
+| パラメータ | 説明 |
+|---|---|
+| `folder_id` | フォルダID |
+| `content_id` | コンテンツID |
+| `kind` | リソース種別。`original` / `proxy` / `thumbnail_400` / `thumbnail_1024` / `thumbnail_1920`(画像のみ) / `smallvideo_1280` / `smallvideo_400` |
+
+リクエスト例:
+```
+curl -H "Authorization: Bearer <access_token>" \
+  "<host>/api/v1/folders/<folder_id>/contents/<content_id>/resources/<kind>/download_url"
+```
+
+**レスポンス（200）**:
+```json
+{ "download_url": "https://aaaa.example.com/1234567890?a=123&b=345" }
+```
+
+> **重要**:
+> - `download_url` は **事前署名済み（認証不要）** で、ブラウザでそのまま開いて保存できる。
+> - **有効期限は 600 秒（10分）**。期限切れ後は再取得が必要。
+> - QR コード共有では「Share 押下 → このAPIで `download_url` 取得 → URL を QR 化して表示 → スマホで読み取りダウンロード」という流れになる。
+
+#### 関連: その他のダウンロードURL取得API
+| 用途 | エンドポイント | 備考 |
+|---|---|---|
+| コンテンツリソース | `GET /api/v1/folders/{folder_id}/contents/{content_id}/resources/{kind}/download_url` | 上記。単一コンテンツの共有に使用 |
+| フォルダリソース | `GET /api/v1/folders/{folder_id}/resources/{path}:downloadUrl` | フォルダ付属リソース用。有効期限600秒 |
+| ファイルオブジェクト | `GET /api/file/v1/{account}/{container}/{object}:downloadUrl` | ファイルストレージ系。有効期限600秒 |
+| 複数一括（ZIP） | `POST /api/v1/cms/contents:download` | 複数コンテンツを非圧縮ZIPにまとめ、status_url 経由で `download_url` を取得 |
+
+---
+
+## 対応フォーマット / HEIF（確認済み）
+
+- **HEIF は対応**。`GET /api/v1/folders/{folder_id}/contents/{content_id}/metadata` の `kind` パラメータに **`image_heif_meta`**（HEIF専用メタデータ）が定義されている。
+  - 同様に `image_raw_meta`（RAW）、`image_arq_meta`（ARQ）も解析対象。その他の `kind`: `exif_original`, `exif_proxy`, `nrtmd`, `image_xmp`, `video_xmp`, `video_moov`, `audio`, `image_meta`。
+- アップロード時は `name` の拡張子（例 `.heif` / `.heic`）と `content_type` がサムネイル生成・メタデータ解析の判定に使われる。HEIF をアップロードする場合は `content_type` に `image/heif` / `image/heic` を指定する。
+
+## 一括処理（バッチ）の可否（確認済み）
+
+- **アップロードの一括APIは存在しない**。`upload` → `PUT` → `contents` の3ステップを **1ファイルずつ** 実行する。複数枚は順次アップロードする。
+- 一括処理が用意されているのは以下のみ:
+  | 操作 | エンドポイント | 上限 |
+  |---|---|---|
+  | ダウンロード（ZIP一括） | `POST /api/v1/cms/contents:download` | - |
+  | コピー | `POST /api/v1/folders/{folder_id}/contents:copy` | 最大100件 |
+  | 削除 | `POST /api/v1/folders/{folder_id}/contents:remove` | 最大1000件 |
+  | trash（ゴミ箱へ） | `POST /api/v1/folders/{folder_id}/contents:trash` | 最大100件 |
+  | untrash / list trashed | `POST /api/v1/cms/trashed_contents:untrash` 他 | 最大100〜300件 |
+- `…/resources/{kind}/uploads`（multipart upload）は **1ファイルを分割送信**する機能であり、複数ファイルの一括アップロードではない（1パートは5MB以上5GB以下、最大1000パート）。
+
+## その他の確認事項
+
+- `POST /api/v1/folders/{folder_id}/contents` の追加任意フィールド: `signature`（重複判定。同一 signature が既存なら既存 content_id を返す＝409 Conflict）、`original_id`、`recorded_date`、`lifetime`（`infinite` / `limited`：limited は30日後に削除）、`tags`（最大30件）。
+- 1フォルダあたりの最大コンテンツ数は **15,000件**（超過時はコード `602001`）。
+- `upload_url` の有効期限は **600秒**、PUT は最大 **5GB**。
 
 ### 画像リタッチ・動画編集
 - 画像リタッチ: `POST /api/image/v1/folders/{folder_id}/contents/{content_id}/resources/{kind}:retouch`

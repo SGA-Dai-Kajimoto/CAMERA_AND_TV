@@ -11,12 +11,15 @@ from PyQt5.QtCore import QThread, pyqtSignal
 class Worker(QThread):
     result = pyqtSignal(object)
     error = pyqtSignal(str)
+    progress = pyqtSignal(int, int, str)
 
-    def __init__(self, func, *args, **kwargs):
+    def __init__(self, func, *args, emit_progress=False, **kwargs):
         super().__init__()
         self._func = func
         self._args = args
         self._kwargs = kwargs
+        if emit_progress:
+            self._kwargs["progress"] = self.progress.emit
 
     def run(self):
         try:

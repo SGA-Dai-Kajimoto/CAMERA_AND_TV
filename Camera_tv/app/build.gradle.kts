@@ -70,6 +70,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)

@@ -103,6 +103,25 @@ class ImagingEdgeRepository(
         }
     }
 
+    /**
+     * コンテンツの事前署名済みダウンロードURLを取得する（共有/QR用）。
+     * 返却URLは認証不要・有効期限600秒（10分）。
+     */
+    suspend fun getContentDownloadUrl(
+        folderId: String,
+        contentId: String,
+        kind: String = "original",
+    ): Result<String> = runCatching {
+        withContext(Dispatchers.IO) {
+            val response = api.getContentDownloadUrl(folderId, contentId, kind)
+            response.requireSuccess()
+            val body = response.body()
+                ?: throw IllegalStateException("Response body is null for contentId=$contentId, kind=$kind")
+            body["download_url"]?.toString()
+                ?: throw IllegalStateException("download_url is missing for contentId=$contentId")
+        }
+    }
+
     // ---------------------------------------------------------------- //
     // お気に入り（タグ操作）
     // ---------------------------------------------------------------- //

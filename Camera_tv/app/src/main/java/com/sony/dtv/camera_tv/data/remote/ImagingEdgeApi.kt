@@ -44,6 +44,17 @@ interface ImagingEdgeApi {
         @Path("kind") kind: String,
     ): Response<ResponseBody>
 
+    /**
+     * コンテンツの事前署名済みダウンロードURLを取得する（共有/QR用）。
+     * 返却される download_url は認証不要・有効期限600秒。
+     */
+    @GET("api/v1/folders/{folderId}/contents/{contentId}/resources/{kind}/download_url")
+    suspend fun getContentDownloadUrl(
+        @Path("folderId") folderId: String,
+        @Path("contentId") contentId: String,
+        @Path("kind") kind: String,
+    ): Response<Map<String, Any>>
+
     @POST("api/v1/folders/{folderId}/contents/{contentId}:setTags")
     suspend fun setContentTags(
         @Path("folderId") folderId: String,

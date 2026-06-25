@@ -9,6 +9,8 @@ import com.sony.dtv.camera_tv.data.model.Content
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +34,8 @@ data class SlideshowUiState(
     val isImageLoading: Boolean = false,
     val error: String? = null,
     val thumbnails: Map<String, ByteArray> = emptyMap(),
+    val shareUrl: String? = null,
+    val isShareLoading: Boolean = false,
 )
 
 class SlideshowViewModel(
@@ -132,21 +136,43 @@ class SlideshowViewModel(
 
     /**
      * 現在の日付グループのサムネイルを読み込む。
+     * 低解像度(thumbnail_400)を優先取得し、複数を並列で読み込んで表示を高速化する。
      */
     fun loadThumbnails() {
         val dateContents = currentDateContents()
         if (dateContents.isEmpty()) return
         scope.launch {
-            val currentThumbs = _uiState.value.thumbnails.toMutableMap()
-            for (content in dateContents) {
-                if (currentThumbs.containsKey(content.contentId)) continue
-                repository.getContentBinary(content.folderId, content.contentId, kind = "proxy")
-                    .onSuccess { bytes ->
-                        currentThumbs[content.contentId] = bytes
-                        _uiState.update { it.copy(thumbnails = currentThumbs.toMap()) }
+            val pending = dateContents.filter { !_uiState.value.thumbnails.containsKey(it.contentId) }
+            pending.chunked(THUMBNAIL_CONCURRENCY).forEach { batch ->
+                val results = batch.map { content ->
+                    async { content.contentId to loadThumbnailBytes(content) }
+                }.awaitAll()
+                val newThumbs = _uiState.value.thumbnails.toMutableMap()
+                var changed = false
+                for ((id, bytes) in results) {
+                    if (bytes != null) {
+                        newThumbs[id] = bytes
+                        changed = true
                     }
+                }
+                if (changed) _uiState.update { it.copy(thumbnails = newThumbs.toMap()) }
             }
         }
+    }
+
+    /**
+     * 1コンテンツのサムネイルバイトを取得する。
+     * レスポンス重視で低解像度から順に試行する:
+     *   thumbnail_400(長辺400px) → thumbnail_1024(長辺1024px) → original。
+     * すべて失敗したら null。
+     */
+    private suspend fun loadThumbnailBytes(content: Content): ByteArray? {
+        for (kind in THUMBNAIL_KINDS) {
+            repository.getContentBinary(content.folderId, content.contentId, kind = kind)
+                .onSuccess { return it }
+        }
+        android.util.Log.e("SlideshowVM", "thumbnail load failed cid=${content.contentId} (tried ${THUMBNAIL_KINDS})")
+        return null
     }
 
     /**
@@ -214,6 +240,36 @@ class SlideshowViewModel(
                     _uiState.update { it.copy(error = e.message) }
                 }
         }
+    }
+
+    /**
+     * 現在表示中のコンテンツの共有用ダウンロードURL（事前署名済み・認証不要・600秒有効）を取得する。
+     * 取得した URL は shareUrl に格納され、QRコード表示に使う。
+     */
+    fun requestShareUrl() {
+        val dateContents = currentDateContents()
+        if (dateContents.isEmpty()) return
+        val state = _uiState.value
+        val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
+        val content = dateContents[index]
+        _uiState.update { it.copy(isShareLoading = true, shareUrl = null) }
+        scope.launch {
+            repository.getContentDownloadUrl(content.folderId, content.contentId, kind = "original")
+                .onSuccess { url ->
+                    _uiState.update { it.copy(isShareLoading = false, shareUrl = url) }
+                }
+                .onFailure { e ->
+                    android.util.Log.e("SlideshowVM", "share url failed: ${e.message}")
+                    _uiState.update { it.copy(isShareLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    /**
+     * 共有URL（QR）表示を閉じる。
+     */
+    fun clearShareUrl() {
+        _uiState.update { it.copy(shareUrl = null, isShareLoading = false) }
     }
 
     /**
@@ -330,6 +386,13 @@ class SlideshowViewModel(
 
     companion object {
         const val SLIDESHOW_INTERVAL_MS = 5000L
+        const val THUMBNAIL_CONCURRENCY = 4
+
+        // サムネイルに使う解像度。レスポンス重視で低解像度から順に試す。
+        //   thumbnail_400 : 長辺400px / quality80 / Exif除去 / 自動回転（最小・最速）
+        //   thumbnail_1024: 長辺1024px（thumbnail_400 が無い場合のフォールバック）
+        //   original      : 上記が無い場合の最終フォールバック
+        val THUMBNAIL_KINDS = listOf("thumbnail_400", "thumbnail_1024", "original")
 
         fun factory(
             repository: ImagingEdgeRepository,

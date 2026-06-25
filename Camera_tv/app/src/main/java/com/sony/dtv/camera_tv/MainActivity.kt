@@ -43,6 +43,11 @@ class MainActivity : ComponentActivity() {
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(AuthInterceptor(tokenPrefs))
             .addInterceptor(logging)
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .build()
         val baseUrl = runBlocking {
             tokenPrefs.baseUrl.first().ifEmpty { TokenPreferences.DEFAULT_BASE_URL }
