@@ -24,6 +24,8 @@ QR コード認証用ローカルサーバー（FastAPI）。
   - 単回受渡し    : トークンは1度取得すると消費（再取得不可）
 """
 
+import base64
+import hashlib
 import html
 import secrets
 import time
@@ -50,6 +52,7 @@ class PairingSession:
     device_secret: str
     state: str
     device_id: str
+    code_verifier: str
     created_at: float
     status: str = "pending"  # pending | completed
     tokens: dict = field(default_factory=dict)
@@ -70,6 +73,8 @@ class SessionStore:
             device_secret=secrets.token_urlsafe(24),
             state=secrets.token_urlsafe(24),
             device_id=device_id or "camera-tv",
+            # PKCE (RFC 7636) code_verifier。43〜128文字の unreserved 文字。
+            code_verifier=secrets.token_urlsafe(64),
             created_at=time.time(),
         )
         with self._lock:
@@ -151,13 +156,22 @@ async def pairing_redirect(session_id: str) -> RedirectResponse:
     if session is None or _is_expired(session):
         return _error_page("このQRコードは無効または期限切れです。TVで再度QRを表示してください。", status=410)
 
+    # PKCE: code_challenge = BASE64URL( SHA256( code_verifier ) )（パディング無し）
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(session.code_verifier.encode()).digest())
+        .rstrip(b"=")
+        .decode()
+    )
+    # device_type は Enum(pc/mobile/mobile_sso)のみで tv は無い。
+    # スマホのブラウザでログインするため、device_type は省略し Web ブラウザ扱いにする
+    # （省略すると app_version / platform 等の必須項目も不要になる）。
     params = {
         "lang": "ja",
         "country": "JP",
         "redirect_url": f"{config.PUBLIC_BASE_URL}/callback",
         "app_type": config.APP_TYPE,
         "device_id": session.device_id,
-        "device_type": "tv",
+        "code_challenge": challenge,
         "state": session.state,
     }
     auth_url = f"{config.SONY_BASE_URL}/api/v1/oauth2/auth?{urlencode(params)}"
@@ -187,7 +201,11 @@ async def oauth_callback(
     try:
         resp = requests.post(
             f"{config.SONY_BASE_URL}/api/v1/oauth2/token",
-            json={"app_type": config.APP_TYPE, "auth_code": code},
+            json={
+                "app_type": config.APP_TYPE,
+                "auth_code": code,
+                "code_verifier": session.code_verifier,
+            },
             timeout=15,
         )
         resp.raise_for_status()

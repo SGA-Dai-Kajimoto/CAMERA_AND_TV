@@ -75,9 +75,17 @@ pairing.serverUrl=http://192.168.1.10:8000
 
 - **HTTP 平文**で動作するため、必ず**信頼できる LAN 内のみ**で使用すること。
 - 公開ネットワークに出す場合は HTTPS（リバースプロキシ等）を前提とすること。
+- **PKCE (RFC 7636)** を使用（`code_challenge`/`code_verifier`）し、認可コード横取りを防止。
 - `redirect_url` に自作サーバーURLを指定できるかは Sony 側アプリ設定に依存する。
   指定不可の場合は本方式は成立しないため、事前確認が必要。
 - セッションはインメモリ管理（プロセス再起動で消える）。単一プロセス運用が前提。
+
+## API 仕様上の注意（確認済み）
+
+- `GET /api/v1/oauth2/auth` の `device_type` は Enum **`pc` / `mobile` / `mobile_sso`** のみで
+  `tv` は無い。本サーバーはスマホのブラウザでログインするため `device_type` を**省略**し、
+  Web ブラウザ扱いとしている（省略により `app_version` / `platform` 等の必須化も回避）。
+- トークン交換は `POST /api/v1/oauth2/token` に `auth_code` + `code_verifier`（PKCE）を送る。
 
 ## 重要な未確認事項
 
