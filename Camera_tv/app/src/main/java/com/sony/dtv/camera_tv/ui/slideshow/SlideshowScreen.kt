@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -56,6 +57,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.asImageBitmap
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
+import com.sony.dtv.camera_tv.data.model.ratingValue
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.YearMonth
@@ -141,20 +143,37 @@ fun SlideshowScreen(
 
                     ScreenMode.Menu -> {
                         PhotoBackground(uiState = uiState)
+                        var showRatingDialog by remember { mutableStateOf(false) }
                         MenuOverlay(
                             uiState = uiState,
                             viewModel = viewModel,
                             onDateSelect = { screenMode = ScreenMode.DateSelect },
-                            onFavorite = {
-                                viewModel.toggleFavorite()
-                                toastMessage = "Registered as favorite"
-                                screenMode = ScreenMode.Photo
-                            },
+                            onFavorite = { showRatingDialog = true },
                             onDelete = { showDeleteConfirm = true },
                             onShare = { viewModel.requestShareUrl() },
+                            onSort = {
+                                viewModel.toggleSortMode()
+                                toastMessage = if (uiState.sortMode == SortMode.DateDesc) {
+                                    "Sorted by rating"
+                                } else {
+                                    "Sorted by date"
+                                }
+                            },
                             onOpenGallery = { screenMode = ScreenMode.Gallery },
                             onDismiss = { screenMode = ScreenMode.Photo },
                         )
+                        if (showRatingDialog) {
+                            RatingDialog(
+                                currentRating = uiState.currentContentRating,
+                                isLoading = uiState.isRatingLoading,
+                                onRatingSelected = { rating ->
+                                    viewModel.setCurrentContentRating(rating)
+                                    showRatingDialog = false
+                                    toastMessage = if (rating == 0) "Rating cleared" else "Rated as $rating stars"
+                                },
+                                onDismiss = { showRatingDialog = false },
+                            )
+                        }
                         if (showDeleteConfirm) {
                             DeleteConfirmOverlay(
                                 onConfirm = {
@@ -265,8 +284,12 @@ private fun PhotoScreen(
         }
 
         // Position indicator
-        val dateContents = uiState.contents.filter { content ->
-            uiState.selectedDate == null || extractDateFromContent(content) == uiState.selectedDate
+        val dateContents = if (uiState.sortMode == SortMode.RatingDesc) {
+            uiState.contents
+        } else {
+            uiState.contents.filter { content ->
+                uiState.selectedDate == null || extractDateFromContent(content) == uiState.selectedDate
+            }
         }
         if (dateContents.isNotEmpty()) {
             Text(
@@ -301,8 +324,9 @@ private fun PhotoScreen(
 private fun PhotoBackground(uiState: SlideshowUiState) {
     val bytes = uiState.currentImageBytes
     if (bytes != null) {
+        // フルサイズ画像は Canvas の最大サイズを超えるため、画面サイズ相当までダウンサンプルする
         val bitmap = remember(bytes) {
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            decodeSampledBitmap(bytes, FULLSCREEN_MAX_PX)
         }
         if (bitmap != null) {
             Image(
@@ -327,6 +351,7 @@ private fun MenuOverlay(
     onFavorite: () -> Unit,
     onDelete: () -> Unit,
     onShare: () -> Unit,
+    onSort: () -> Unit,
     onOpenGallery: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -371,7 +396,7 @@ private fun MenuOverlay(
                         }
                         Key.DirectionRight -> {
                             if (focusArea == 0) {
-                                buttonIndex = (buttonIndex + 1).coerceAtMost(3)
+                                buttonIndex = (buttonIndex + 1).coerceAtMost(4)
                             } else {
                                 thumbIndex = (thumbIndex + 1).coerceAtMost(dateContents.size - 1)
                             }
@@ -402,6 +427,7 @@ private fun MenuOverlay(
                                     1 -> onFavorite()
                                     2 -> onDelete()
                                     3 -> onShare()
+                                    4 -> onSort()
                                 }
                             } else {
                                 // Select thumbnail → jump to that image
@@ -438,6 +464,12 @@ private fun MenuOverlay(
                 MenuButton(label = "Delete", isFocused = focusArea == 0 && buttonIndex == 2, onClick = onDelete)
                 Spacer(modifier = Modifier.width(24.dp))
                 MenuButton(label = "Share", isFocused = focusArea == 0 && buttonIndex == 3, onClick = onShare)
+                Spacer(modifier = Modifier.width(24.dp))
+                MenuButton(
+                    label = if (uiState.sortMode == SortMode.RatingDesc) "Sort: Rating" else "Sort: Date",
+                    isFocused = focusArea == 0 && buttonIndex == 4,
+                    onClick = onSort,
+                )
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -470,6 +502,7 @@ private fun MenuOverlay(
                         contentAlignment = Alignment.Center,
                     ) {
                         ThumbnailInner(bytes = thumbBytes, index = index, reqPx = 160)
+                        RatingBadge(content.ratingValue())
                     }
                 }
             }
@@ -619,6 +652,7 @@ private fun GalleryScreen(
                             index = index,
                             reqPx = reqPx,
                         )
+                        RatingBadge(content.ratingValue())
                     }
                 }
             }
@@ -628,6 +662,9 @@ private fun GalleryScreen(
 
 private const val MIN_GALLERY_COLUMNS = 3
 private const val MAX_GALLERY_COLUMNS = 8
+
+/** 全画面表示用にダウンサンプルする際の最大辺ピクセル（4K TV 相当）。 */
+private const val FULLSCREEN_MAX_PX = 2160
 
 /**
  * サムネイル1枚の中身を描画する。
@@ -641,7 +678,7 @@ private fun ThumbnailInner(bytes: ByteArray?, index: Int, reqPx: Int) {
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = "Thumbnail ${index + 1}",
-                contentScale = ContentScale.Crop,
+                contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
             )
             return
@@ -652,6 +689,29 @@ private fun ThumbnailInner(bytes: ByteArray?, index: Int, reqPx: Int) {
         color = Color.Gray,
         fontSize = 12.sp,
     )
+}
+
+/**
+ * サムネイルに重ねて表示する評価バッジ（★N）。
+ * 評価未設定（0）の場合は何も表示しない。
+ */
+@Composable
+private fun BoxScope.RatingBadge(rating: Int) {
+    if (rating <= 0) return
+    Row(
+        modifier = Modifier
+            .align(Alignment.BottomStart)
+            .padding(2.dp)
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(horizontal = 3.dp, vertical = 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = "★$rating",
+            color = Color(0xFFFFD700),
+            fontSize = 11.sp,
+        )
+    }
 }
 
 /**
@@ -1129,5 +1189,162 @@ private fun extractDateFromContent(content: com.sony.dtv.camera_tv.data.model.Co
         }
     } catch (_: Exception) {
         null
+    }
+}
+
+// ============================================================
+// Rating dialog (5-star rating selection)
+// ============================================================
+
+/**
+ * 5段階評価選択ダイアログ。
+ * リモコンで左右キー（⬅️/➡️）で星を選択、決定キー（⏎）で確定。
+ */
+@Composable
+private fun RatingDialog(
+    currentRating: Int = 0,
+    isLoading: Boolean = false,
+    onRatingSelected: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selectedRating by remember { mutableIntStateOf(currentRating.coerceIn(0, 5)) }
+    val ratingFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        try { ratingFocusRequester.requestFocus() } catch (_: Exception) {}
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.85f))
+            .focusRequester(ratingFocusRequester)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    when (keyEvent.key) {
+                        Key.DirectionLeft -> {
+                            selectedRating = (selectedRating - 1).coerceAtLeast(0)
+                            true
+                        }
+                        Key.DirectionRight -> {
+                            selectedRating = (selectedRating + 1).coerceAtMost(5)
+                            true
+                        }
+                        Key.Enter, Key.DirectionCenter -> {
+                            if (!isLoading) {
+                                onRatingSelected(selectedRating)
+                            }
+                            true
+                        }
+                        Key.Back -> { onDismiss(); true }
+                        else -> false
+                    }
+                } else false
+            },
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .fillMaxWidth(0.8f),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = "お気に入り評価",
+                color = Color.White,
+                fontSize = 24.sp,
+                modifier = Modifier.padding(bottom = 32.dp),
+            )
+
+            // 現在の選択値（0=評価なし）
+            Text(
+                text = if (selectedRating == 0) "評価なし" else "★ × $selectedRating",
+                color = Color.White,
+                fontSize = 20.sp,
+            )
+
+            // Star rating display (0=なし, 1-5)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // 評価なし（クリア）ボタン
+                val isClearFocused = selectedRating == 0
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(
+                            color = if (isClearFocused) Color(0xFFFFD700) else Color.Gray,
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                        )
+                        .border(
+                            width = if (isClearFocused) 3.dp else 1.dp,
+                            color = if (isClearFocused) Color.White else Color.DarkGray,
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "✕",
+                        color = if (isClearFocused) Color.Black else Color.LightGray,
+                        fontSize = 32.sp,
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+
+                repeat(5) { index ->
+                    val rating = index + 1
+                    val isFocused = rating == selectedRating
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(
+                                color = if (isFocused)
+                                    Color(0xFFFFD700) // Gold for focused
+                                else if (rating <= selectedRating)
+                                    Color(0xFFFFAA00) // Orange for selected
+                                else
+                                    Color.Gray, // Gray for unselected
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                            )
+                            .border(
+                                width = if (isFocused) 3.dp else 1.dp,
+                                color = if (isFocused) Color.White else Color.DarkGray,
+                                shape = androidx.compose.foundation.shape.CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "★",
+                            color = if (rating <= selectedRating) Color.White else Color.LightGray,
+                            fontSize = 40.sp,
+                        )
+                    }
+                    if (index < 4) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                }
+            }
+
+            // Help text
+            Text(
+                text = "←/→キー: 選択（左端✕で評価なし）   決定キー: 確定   戻るキー: キャンセル",
+                color = Color.White.copy(alpha = 0.7f),
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
+        }
     }
 }

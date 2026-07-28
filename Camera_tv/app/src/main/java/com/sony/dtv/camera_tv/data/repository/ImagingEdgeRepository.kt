@@ -5,6 +5,7 @@ import com.sony.dtv.camera_tv.data.model.Content
 import com.sony.dtv.camera_tv.data.model.Folder
 import com.sony.dtv.camera_tv.data.remote.ImagingEdgeApi
 import com.sony.dtv.camera_tv.data.remote.dto.ContentListResponse
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.Response
@@ -101,7 +102,7 @@ class ImagingEdgeRepository(
                 ?: throw IllegalStateException("Response body is null for contentId=$contentId, kind=$kind")
             body.bytes()
         }
-    }
+    }.rethrowCancellation()
 
     /**
      * コンテンツの事前署名済みダウンロードURLを取得する（共有/QR用）。
@@ -136,6 +137,42 @@ class ImagingEdgeRepository(
         response.requireSuccess()
     }
 
+    /**
+     * コンテンツに5段階評価（1〜5）を設定する。
+     * @param folderId フォルダID
+     * @param contentId コンテンツID
+     * @param rating 評価（1〜5）
+     */
+    suspend fun setContentRating(
+        folderId: String,
+        contentId: String,
+        rating: Int,
+    ): Result<Unit> = runCatching {
+        require(rating in 1..5) { "Rating must be between 1 and 5" }
+        setContentTags(folderId, contentId, listOf("rating:$rating")).getOrThrow()
+    }
+
+    /**
+     * 指定された評価のコンテンツ一覧を取得する。
+     * @param folderId フォルダID
+     * @param minRating 最小評価（1〜5）
+     * @param orderBy ソート順（"updated_date_desc" or "updated_date_asc"）
+     * @param limit 取得件数（1〜300、デフォルト100）
+     * @return 評価でフィルタされたコンテンツリスト
+     */
+    suspend fun listContentsWithRatingFilter(
+        folderId: String,
+        minRating: Int = 4,
+        orderBy: String = "updated_date_desc",
+        limit: Int = 300,
+    ): Result<List<Content>> = runCatching {
+        require(minRating in 1..5) { "Rating must be between 1 and 5" }
+        val filterBy = "rating:$minRating"
+        val response = api.listContents(folderId, orderBy, limit, null, filterBy)
+        response.requireSuccess()
+        response.body()!!.contents
+    }
+
     // ---------------------------------------------------------------- //
     // コンテンツ削除
     // ---------------------------------------------------------------- //
@@ -158,4 +195,11 @@ class ImagingEdgeRepository(
             throw IllegalStateException("API error ${code()}: ${errorBody()?.string()}")
         }
     }
+
+    /**
+     * runCatching がコルーチンのキャンセル例外（CancellationException）まで
+     * 捕捉してしまうのを防ぐ。キャンセルは失敗ではないので再スローして正常に伝播させる。
+     */
+    private fun <T> Result<T>.rethrowCancellation(): Result<T> =
+        onFailure { if (it is CancellationException) throw it }
 }

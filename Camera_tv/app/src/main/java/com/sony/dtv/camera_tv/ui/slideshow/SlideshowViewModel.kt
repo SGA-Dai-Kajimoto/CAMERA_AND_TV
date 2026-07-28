@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.sony.dtv.camera_tv.data.model.Content
+import com.sony.dtv.camera_tv.data.model.ratingValue
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -22,6 +23,13 @@ import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
+/**
+ * コンテンツの並び順。
+ *  - DateDesc  : 日付グループ表示（既定）
+ *  - RatingDesc: 全コンテンツを評価の高い順にフラット表示
+ */
+enum class SortMode { DateDesc, RatingDesc }
+
 data class SlideshowUiState(
     val isLoading: Boolean = false,
     val contents: List<Content> = emptyList(),
@@ -36,6 +44,9 @@ data class SlideshowUiState(
     val thumbnails: Map<String, ByteArray> = emptyMap(),
     val shareUrl: String? = null,
     val isShareLoading: Boolean = false,
+    val currentContentRating: Int = 0,
+    val isRatingLoading: Boolean = false,
+    val sortMode: SortMode = SortMode.DateDesc,
 )
 
 class SlideshowViewModel(
@@ -90,7 +101,28 @@ class SlideshowViewModel(
 
     fun selectDate(date: LocalDate) {
         _uiState.update {
-            it.copy(selectedDate = date, currentIndex = 0, currentImageBytes = null)
+            it.copy(
+                selectedDate = date,
+                currentIndex = 0,
+                currentImageBytes = null,
+                sortMode = SortMode.DateDesc,
+            )
+        }
+        loadCurrentImage()
+        restartAutoAdvance()
+    }
+
+    /**
+     * 並び順（日付順／評価順）を切り替える。
+     * 切り替え後は先頭にリセットして画像を再読み込みする。
+     */
+    fun toggleSortMode() {
+        val next = when (_uiState.value.sortMode) {
+            SortMode.DateDesc -> SortMode.RatingDesc
+            SortMode.RatingDesc -> SortMode.DateDesc
+        }
+        _uiState.update {
+            it.copy(sortMode = next, currentIndex = 0, currentImageBytes = null)
         }
         loadCurrentImage()
         restartAutoAdvance()
@@ -277,6 +309,13 @@ class SlideshowViewModel(
      */
     fun currentDateContents(): List<Content> {
         val state = _uiState.value
+        if (state.sortMode == SortMode.RatingDesc) {
+            // 評価の高い順（同評価は新しい日付順）で全コンテンツをフラット表示
+            return state.contents.sortedWith(
+                compareByDescending<Content> { it.ratingValue() }
+                    .thenByDescending { extractDate(it)?.toEpochDay() ?: Long.MIN_VALUE }
+            )
+        }
         val selectedDate = state.selectedDate ?: return state.contents
         return state.contents.filter { extractDate(it) == selectedDate }
     }
@@ -340,7 +379,9 @@ class SlideshowViewModel(
         if (content.contentId == loadedContentId && state.currentImageBytes != null) return
         imageLoadJob?.cancel()
         imageLoadJob = scope.launch {
-            _uiState.update { it.copy(isImageLoading = true) }
+            _uiState.update {
+                it.copy(isImageLoading = true, currentContentRating = content.ratingValue())
+            }
             repository.getContentBinary(content.folderId, content.contentId, kind = "original")
                 .onSuccess { bytes ->
                     android.util.Log.d("SlideshowVM", "Image loaded: ${bytes.size} bytes, contentId=${content.contentId}")
@@ -382,6 +423,92 @@ class SlideshowViewModel(
     override fun onCleared() {
         super.onCleared()
         cancelAutoAdvance()
+    }
+
+    // ---------------------------------------------------------------- //
+    // お気に入り（5段階評価）
+    // ---------------------------------------------------------------- //
+
+    /**
+     * 現在表示中のコンテンツに5段階評価を設定する。
+     * @param rating 評価（0〜5、0は評価なし＝rating タグを削除）
+     */
+    fun setCurrentContentRating(rating: Int) {
+        val dateContents = currentDateContents()
+        if (dateContents.isEmpty()) return
+        val state = _uiState.value
+        val index = state.currentIndex.coerceIn(0, dateContents.size - 1)
+        val content = dateContents[index]
+        val clamped = rating.coerceIn(0, 5)
+
+        // 既存タグから rating:* を除去し、1..5 のときのみ rating:N を付与する（0 は評価なし）
+        val newTags = content.tags.orEmpty().filterNot { it.startsWith("rating:") } +
+            if (clamped in 1..5) listOf("rating:$clamped") else emptyList()
+
+        _uiState.update { it.copy(isRatingLoading = true) }
+        scope.launch {
+            repository.setContentTags(content.folderId, content.contentId, newTags)
+                .onSuccess {
+                    // ローカルの tags を更新して即時反映（★バッジ・評価順ソートに反映）
+                    val updatedContents = _uiState.value.contents.map { c ->
+                        if (c.contentId == content.contentId) c.copy(tags = newTags) else c
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isRatingLoading = false,
+                            currentContentRating = clamped,
+                            contents = updatedContents,
+                            groupedItems = groupByDate(updatedContents),
+                        )
+                    }
+                    // 評価順表示では再ソート後も同じ写真を選択し続ける
+                    val newIndex = currentDateContents().indexOfFirst { it.contentId == content.contentId }
+                    if (newIndex >= 0) {
+                        _uiState.update { it.copy(currentIndex = newIndex) }
+                    }
+                    android.util.Log.d("SlideshowVM", "Rating set: $clamped for contentId=${content.contentId}")
+                }
+                .onFailure { e ->
+                    android.util.Log.e("SlideshowVM", "Rating failed: ${e.message}")
+                    _uiState.update { it.copy(isRatingLoading = false, error = e.message) }
+                }
+        }
+    }
+
+    /**
+     * 高評価（4〜5）のコンテンツのみを表示するフィルタを適用する。
+     */
+    fun filterByHighRating() {
+        scope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            // 全フォルダから評価4以上のコンテンツを取得（最初のフォルダから）
+            val folders = repository.listFolders().getOrNull() ?: emptyList()
+            val firstFolder = folders.firstOrNull()
+            if (firstFolder != null) {
+                repository.listContentsWithRatingFilter(firstFolder.folderId, minRating = 4)
+                    .onSuccess { contents ->
+                        val grouped = groupByDate(contents)
+                        val dates = extractAvailableDates(contents)
+                        val latestDate = dates.firstOrNull()
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                contents = contents,
+                                groupedItems = grouped,
+                                availableDates = dates,
+                                selectedDate = latestDate,
+                                currentIndex = 0,
+                            )
+                        }
+                        if (contents.isNotEmpty()) {
+                            loadCurrentImage()
+                        }
+                    }
+                    .onFailure { e ->
+                        _uiState.update { it.copy(isLoading = false, error = e.message) }
+                    }
+            }
+        }
     }
 
     companion object {

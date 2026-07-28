@@ -21,12 +21,36 @@ class ApiClient:
 
     def __init__(self):
         self.auth = load_auth()
-        if not self.auth.get("access_token") and self.auth.get("refresh_token"):
+        # access_token が期限切れ（または未設定）の場合、起動時に事前リフレッシュする
+        if self._is_access_token_expired():
+            if self._is_refresh_token_expired():
+                raise RuntimeError(
+                    "refresh_token の有効期限が切れています。\n"
+                    "docs/auth_spec.md の Step 1〜3 を参照して再ログインしてください。"
+                )
             self.refresh_token()
 
     # ---------------------------------------------------------------- #
     #  内部ヘルパー
     # ---------------------------------------------------------------- #
+
+    def _is_access_token_expired(self) -> bool:
+        """access_token が未設定または access_token_ttl を過ぎていれば True。"""
+        if not self.auth.get("access_token"):
+            return True
+        ttl = self.auth.get("access_token_ttl", 0)
+        if ttl == 0:
+            return False  # TTL 未設定は有効とみなす
+        return int(time.time()) >= ttl
+
+    def _is_refresh_token_expired(self) -> bool:
+        """refresh_token が未設定または refresh_token_ttl を過ぎていれば True。"""
+        if not self.auth.get("refresh_token"):
+            return True
+        ttl = self.auth.get("refresh_token_ttl", 0)
+        if ttl == 0:
+            return False  # TTL 未設定は有効とみなす
+        return int(time.time()) >= ttl
 
     def _base_url(self) -> str:
         return self.auth.get("base_url", "https://ws.dev.imagingedge.sony.net")
@@ -49,7 +73,17 @@ class ApiClient:
     # ---------------------------------------------------------------- #
 
     def refresh_token(self) -> None:
-        """refresh_token を使って access_token を更新し、ファイルに保存する。"""
+        """refresh_token を使って access_token を更新し、ファイルに保存する。
+        
+        APIドキュメント仕様（docs/auth_spec.md）:
+        - refresh_token_ttl が切れていた場合は ValueError を送出する
+        - 使用した refresh_token は無効になるため、レスポンスの新しいトークンを必ず保存する
+        """
+        if self._is_refresh_token_expired():
+            raise ValueError(
+                "refresh_token の有効期限が切れています。再ログインが必要です。\n"
+                "docs/auth_spec.md の Step 1〜3 を参照してください。"
+            )
         resp = requests.post(
             f"{self._base_url()}/api/v1/oauth2/token",
             json={

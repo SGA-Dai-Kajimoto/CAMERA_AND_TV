@@ -66,27 +66,51 @@ class TokenPreferencesTest {
     }
 
     @Test
-    fun `initIfEmpty writes values only when not present`() = testScope.runTest {
-        // 1回目: 書き込まれる
-        tokenPreferences.initIfEmpty(
+    fun `seedTokens writes on first call and preserves rotated token when seed unchanged`() = testScope.runTest {
+        // 1回目: シードが書き込まれる
+        tokenPreferences.seedTokens(
             baseUrl = TokenPreferences.DEFAULT_BASE_URL,
             appType = "_trial_",
             accessToken = "token_A",
-            accessTokenTtl = 3600L,
             refreshToken = "refresh_A",
-            refreshTokenTtl = 86400L,
         )
         assertEquals("token_A", tokenPreferences.accessToken.first())
+        assertEquals("refresh_A", tokenPreferences.refreshToken.first())
 
-        // 2回目: 上書きされない
-        tokenPreferences.initIfEmpty(
+        // リフレッシュでトークンがローテーションされた状態を模擬
+        tokenPreferences.saveAccessToken("token_rotated")
+        tokenPreferences.saveRefreshToken("refresh_rotated")
+
+        // 2回目: シード(refresh_A)が同じなら上書きせず、ローテーション後を保持
+        tokenPreferences.seedTokens(
+            baseUrl = TokenPreferences.DEFAULT_BASE_URL,
+            appType = "_trial_",
+            accessToken = "token_A",
+            refreshToken = "refresh_A",
+        )
+        assertEquals("token_rotated", tokenPreferences.accessToken.first())
+        assertEquals("refresh_rotated", tokenPreferences.refreshToken.first())
+    }
+
+    @Test
+    fun `seedTokens re-seeds when local properties token changes`() = testScope.runTest {
+        tokenPreferences.seedTokens(
+            baseUrl = TokenPreferences.DEFAULT_BASE_URL,
+            appType = "_trial_",
+            accessToken = "token_A",
+            refreshToken = "refresh_A",
+        )
+        // ローテーション後の状態
+        tokenPreferences.saveRefreshToken("refresh_rotated")
+
+        // local.properties を更新して新しいシードを注入 → 反映される
+        tokenPreferences.seedTokens(
             baseUrl = TokenPreferences.DEFAULT_BASE_URL,
             appType = "_trial_",
             accessToken = "token_B",
-            accessTokenTtl = 3600L,
             refreshToken = "refresh_B",
-            refreshTokenTtl = 86400L,
         )
-        assertEquals("token_A", tokenPreferences.accessToken.first())
+        assertEquals("token_B", tokenPreferences.accessToken.first())
+        assertEquals("refresh_B", tokenPreferences.refreshToken.first())
     }
 }

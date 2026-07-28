@@ -110,3 +110,80 @@ python camera/app/check_api.py
 - `auth_info.json` は絶対に git にコミットしない
 - `refresh_token` にも有効期限あり。切れた場合は Step 1〜3 を再実行する
 - `base_url` を本番環境に変更する場合は別途確認が必要
+
+---
+
+## Refresh Token API 仕様（AccountPF）
+
+### エンドポイント
+
+```
+POST /api/v1/oauth2/token
+Content-Type: application/json
+```
+
+### リクエストボディ
+
+| フィールド | 必須 | 説明 |
+|---|---|---|
+| `app_type` | — | アプリ識別子（例: `_trial_`） |
+| `app_sub_type` | — | サブタイプ。複数アプリで同一トークンをリフレッシュする場合のみ使用 |
+| `refresh_token` | ✅ | 現在保持中の Refresh Token |
+| `refresh_token_ttl` | ✅ | Refresh Token の有効期限（Unix timestamp） |
+
+> `auth_code` と `refresh_token` はどちらか一方のみ指定する（同時使用不可）。
+
+**リクエスト例:**
+
+```bash
+curl -X POST https://<host>/api/v1/oauth2/token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_type": "_trial_",
+    "refresh_token": "YYYYYYYYYYYYYYYY",
+    "refresh_token_ttl": 1535281019
+  }'
+```
+
+### レスポンスボディ
+
+| フィールド | 説明 |
+|---|---|
+| `access_token` | 新しい Access Token |
+| `access_token_ttl` | Access Token の有効期限（Unix timestamp） |
+| `refresh_token` | 新しい Refresh Token |
+| `refresh_token_ttl` | Refresh Token の有効期限（Unix timestamp） |
+
+**レスポンス例:**
+
+```json
+{
+  "access_token": "XXXXXXXXXXXXXXXXX",
+  "access_token_ttl": 1532602619,
+  "refresh_token": "YYYYYYYYYYYYYYYY",
+  "refresh_token_ttl": 1535281019
+}
+```
+
+### Refresh Token に関する注意事項（API仕様より）
+
+| 項目 | 内容 |
+|---|---|
+| 事前確認 | リクエスト前に `refresh_token_ttl` が切れていないか確認すること |
+| 使い切り | 一度使用または期限切れになった Refresh Token は再利用不可 |
+| 再認証 | Refresh Token 期限切れ時は `GET /api/v1/oauth2/auth` から再ログイン |
+| リトライ猶予 | ネットワーク障害で取得失敗した場合、**60秒以内**に限り同一の古い Refresh Token で1回リトライ可能 |
+
+### 実装上の動作フロー
+
+```
+起動時
+  ├─ access_token_ttl が現在時刻を過ぎている？
+  │     Yes → refresh_token_ttl を確認
+  │               期限内 → POST /api/v1/oauth2/token でリフレッシュ
+  │               期限切れ → 再ログイン必要（エラー通知）
+  │     No  → そのまま API 呼び出し
+  │
+API 呼び出し中 (401 受信)
+  └─ tryRefreshToken() で再リフレッシュ → 成功なら同リクエストを再試行
+```

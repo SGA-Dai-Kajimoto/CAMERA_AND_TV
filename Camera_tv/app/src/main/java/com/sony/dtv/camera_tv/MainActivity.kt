@@ -27,15 +27,15 @@ class MainActivity : ComponentActivity() {
     private val repository: ImagingEdgeRepository by lazy {
         val tokenPrefs = TokenPreferences.create(applicationContext)
 
-        // local.properties のトークンを DataStore に初期注入（未設定時のみ）
+        // local.properties のトークンを DataStore に注入。
+        // シード（refresh_token）が変わったときだけ書き込み、変更が無ければ
+        // リフレッシュでローテーションされた最新トークンを保持する。
         runBlocking {
-            tokenPrefs.initIfEmpty(
+            tokenPrefs.seedTokens(
                 baseUrl = BuildConfig.DEV_BASE_URL.ifEmpty { TokenPreferences.DEFAULT_BASE_URL },
                 appType = TokenPreferences.DEFAULT_APP_TYPE,
                 accessToken = BuildConfig.DEV_ACCESS_TOKEN,
-                accessTokenTtl = 3600L,
                 refreshToken = BuildConfig.DEV_REFRESH_TOKEN,
-                refreshTokenTtl = 86400L,
             )
         }
 

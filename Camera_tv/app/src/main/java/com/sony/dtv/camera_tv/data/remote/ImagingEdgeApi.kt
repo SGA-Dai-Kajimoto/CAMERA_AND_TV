@@ -34,6 +34,7 @@ interface ImagingEdgeApi {
         @Query("order_by") orderBy: String? = "updated_date_desc",
         @Query("limit") limit: Int? = 300,
         @Query("start_from") startFrom: String? = null,
+        @Query("filter_by") filterBy: String? = null,
     ): Response<ContentListResponse>
 
     @Streaming
@@ -59,12 +60,12 @@ interface ImagingEdgeApi {
     suspend fun setContentTags(
         @Path("folderId") folderId: String,
         @Path("contentId") contentId: String,
-        @Body body: Map<String, Any>,
+        @Body body: Map<String, @JvmSuppressWildcards Any>,
     ): Response<Map<String, Any>>
 
     @POST("api/v1/folders/{folderId}/contents:remove")
     suspend fun removeContents(
         @Path("folderId") folderId: String,
-        @Body body: Map<String, Any>,
+        @Body body: Map<String, @JvmSuppressWildcards Any>,
     ): Response<Map<String, Any>>
 }

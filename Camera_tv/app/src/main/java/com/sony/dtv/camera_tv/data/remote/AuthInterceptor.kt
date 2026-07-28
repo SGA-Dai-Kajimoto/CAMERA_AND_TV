@@ -22,7 +22,17 @@ class AuthInterceptor(
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val accessToken = runBlocking { tokenPreferences.accessToken.first() }
+        // access_token_ttl を確認し、期限切れなら事前リフレッシュする
+        val accessToken = runBlocking {
+            val ttl = tokenPreferences.accessTokenTtl.first()
+            val nowSec = System.currentTimeMillis() / 1000
+            if (ttl > 0 && nowSec >= ttl) {
+                Log.d("AuthInterceptor", "access_token is expired (ttl=$ttl, now=$nowSec). Proactive refresh.")
+                tryRefreshToken() ?: tokenPreferences.accessToken.first()
+            } else {
+                tokenPreferences.accessToken.first()
+            }
+        }
         val request = chain.request().withAuth(accessToken)
         val response = chain.proceed(request)
 
@@ -38,6 +48,9 @@ class AuthInterceptor(
 
     /**
      * refresh_token を使って access_token を更新する。
+     * APIドキュメント仕様（docs/auth_spec.md）:
+     * - refresh_token_ttl が切れていた場合は null を返す（再ログイン必要）
+     * - 使用した refresh_token は無効になるため、レスポンスの新しいトークンを必ず保存する
      * @return 新しい access_token。失敗時は null。
      */
     private suspend fun tryRefreshToken(): String? {
@@ -46,6 +59,13 @@ class AuthInterceptor(
             val appType = tokenPreferences.appType.first()
             val refreshToken = tokenPreferences.refreshToken.first()
             val refreshTokenTtl = tokenPreferences.refreshTokenTtl.first()
+
+            // refresh_token_ttl が切れていれば再ログインが必要
+            val nowSec = System.currentTimeMillis() / 1000
+            if (refreshTokenTtl > 0 && nowSec >= refreshTokenTtl) {
+                Log.e("AuthInterceptor", "refresh_token is expired (ttl=$refreshTokenTtl, now=$nowSec). Re-login required.")
+                return null
+            }
 
             Log.d("AuthInterceptor", "Attempting token refresh. baseUrl=$baseUrl, appType=$appType, refreshToken=${refreshToken.take(10)}...")
 
