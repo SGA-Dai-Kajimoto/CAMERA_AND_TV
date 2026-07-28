@@ -1,17 +1,31 @@
 package com.sony.dtv.camera_tv
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.sony.dtv.camera_tv.data.local.TokenPreferences
 import com.sony.dtv.camera_tv.data.remote.AuthInterceptor
 import com.sony.dtv.camera_tv.data.remote.ImagingEdgeApi
+import com.sony.dtv.camera_tv.data.remote.pairing.PairingClient
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
+import com.sony.dtv.camera_tv.ui.auth.AuthScreen
 import com.sony.dtv.camera_tv.ui.slideshow.SlideshowScreen
 import com.sony.dtv.camera_tv.ui.theme.CameraTvTheme
 import kotlinx.coroutines.flow.first
@@ -20,16 +34,21 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
 
-    // Repository を Activity スコープで一度だけ生成
-    private val repository: ImagingEdgeRepository by lazy {
-        val tokenPrefs = TokenPreferences.create(applicationContext)
+    private val tokenPrefs: TokenPreferences by lazy {
+        TokenPreferences.create(applicationContext)
+    }
 
-        // local.properties のトークンを DataStore に注入。
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // local.properties の dev トークンを DataStore に注入（dev フォールバック）。
         // シード（refresh_token）が変わったときだけ書き込み、変更が無ければ
         // リフレッシュでローテーションされた最新トークンを保持する。
+        // dev トークンが空なら何もしない（＝QR認証画面へ進む）。
         runBlocking {
             tokenPrefs.seedTokens(
                 baseUrl = BuildConfig.DEV_BASE_URL.ifEmpty { TokenPreferences.DEFAULT_BASE_URL },
@@ -39,46 +58,109 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
-        val okHttpClient = OkHttpClient.Builder()
-            .addInterceptor(AuthInterceptor(tokenPrefs))
-            .addInterceptor(logging)
-            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
-            .callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
-            .build()
-        val baseUrl = runBlocking {
-            tokenPrefs.baseUrl.first().ifEmpty { TokenPreferences.DEFAULT_BASE_URL }
-        }
-        val retrofit = Retrofit.Builder()
-            .baseUrl(baseUrl.trimEnd('/') + "/")
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-        val api = retrofit.create(ImagingEdgeApi::class.java)
-        ImagingEdgeRepository(api, tokenPrefs)
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         setContent {
             CameraTvTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background,
                 ) {
-                    CameraTvNavGraph(repository = repository)
+                    AppRoot(
+                        tokenPrefs = tokenPrefs,
+                        pairingServerUrl = BuildConfig.PAIRING_SERVER_URL,
+                    )
                 }
             }
         }
     }
 }
 
+/**
+ * 認証ゲート。
+ * - refresh_token が未取得 → QR 認証画面（AuthScreen）
+ * - 取得済み            → スライドショー（Repository を生成して表示）
+ */
 @Composable
-private fun CameraTvNavGraph(repository: ImagingEdgeRepository) {
-    SlideshowScreen(
-        repository = repository,
-    )
+private fun AppRoot(
+    tokenPrefs: TokenPreferences,
+    pairingServerUrl: String,
+) {
+    val context = LocalContext.current
+    // 初回は null（未確定）＝ローディング。以降は "" or トークン文字列。
+    val refreshToken by tokenPrefs.refreshToken.collectAsState(initial = null)
+
+    when {
+        refreshToken == null -> LoadingBox()
+
+        refreshToken.isNullOrEmpty() -> {
+            if (pairingServerUrl.isBlank()) {
+                ConfigErrorBox()
+            } else {
+                val pairingApi = remember(pairingServerUrl) { PairingClient.create(pairingServerUrl) }
+                AuthScreen(
+                    pairingApi = pairingApi,
+                    tokenPreferences = tokenPrefs,
+                    onAuthenticated = { /* refreshToken フローが更新され自動遷移 */ },
+                )
+            }
+        }
+
+        else -> {
+            val repository = remember { buildRepository(context.applicationContext, tokenPrefs) }
+            SlideshowScreen(repository = repository)
+        }
+    }
+}
+
+@Composable
+private fun LoadingBox() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        CircularProgressIndicator()
+    }
+}
+
+@Composable
+private fun ConfigErrorBox() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(48.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            "認証サーバーが設定されていません。\n" +
+                "local.properties の pairing.serverUrl を設定してください。",
+            fontSize = 20.sp,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+/**
+ * Sony API 用の Repository を生成する。
+ * AuthInterceptor が Bearer 付与と 401 リフレッシュを担う。
+ */
+private fun buildRepository(
+    context: Context,
+    tokenPrefs: TokenPreferences,
+): ImagingEdgeRepository {
+    val logging = HttpLoggingInterceptor().apply { level = HttpLoggingInterceptor.Level.BASIC }
+    val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(AuthInterceptor(tokenPrefs))
+        .addInterceptor(logging)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
+    val baseUrl = runBlocking {
+        tokenPrefs.baseUrl.first().ifEmpty { TokenPreferences.DEFAULT_BASE_URL }
+    }
+    val retrofit = Retrofit.Builder()
+        .baseUrl(baseUrl.trimEnd('/') + "/")
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+    val api = retrofit.create(ImagingEdgeApi::class.java)
+    return ImagingEdgeRepository(api, tokenPrefs)
 }

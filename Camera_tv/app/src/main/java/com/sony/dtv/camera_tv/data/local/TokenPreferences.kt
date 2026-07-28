@@ -90,4 +90,45 @@ class TokenPreferences(private val dataStore: DataStore<Preferences>) {
             }
         }
     }
+
+    /**
+     * QR 認証（ペアリングサーバー）で取得したトークン一式を保存する。
+     *
+     * seedTokens とは独立して、取得したトークンをそのまま書き込む。
+     * ここで KEY_SEED_MARKER も refresh_token に合わせて更新することで、
+     * 次回起動時の seedTokens が local.properties の（空 or 古い）シードで
+     * QR 取得トークンを上書きしないようにする。
+     */
+    suspend fun saveAuthTokens(
+        baseUrl: String,
+        appType: String,
+        accessToken: String,
+        accessTokenTtl: Long,
+        refreshToken: String,
+        refreshTokenTtl: Long,
+    ) {
+        dataStore.edit { prefs ->
+            if (baseUrl.isNotEmpty()) prefs[KEY_BASE_URL] = baseUrl
+            if (appType.isNotEmpty()) prefs[KEY_APP_TYPE] = appType
+            prefs[KEY_ACCESS_TOKEN] = accessToken
+            prefs[KEY_ACCESS_TOKEN_TTL] = accessTokenTtl
+            prefs[KEY_REFRESH_TOKEN] = refreshToken
+            prefs[KEY_REFRESH_TOKEN_TTL] = refreshTokenTtl
+            // seedTokens が QR 取得トークンを上書きしないようにマーカーを合わせる
+            if (refreshToken.isNotEmpty()) prefs[KEY_SEED_MARKER] = refreshToken
+        }
+    }
+
+    /** すべての認証情報を消去する（サインアウト／再認証用）。 */
+    suspend fun clear() {
+        dataStore.edit { prefs ->
+            prefs.remove(KEY_ACCESS_TOKEN)
+            prefs.remove(KEY_ACCESS_TOKEN_TTL)
+            prefs.remove(KEY_REFRESH_TOKEN)
+            prefs.remove(KEY_REFRESH_TOKEN_TTL)
+            prefs.remove(KEY_USER_ID)
+            prefs.remove(KEY_ACCOUNT)
+            prefs.remove(KEY_SEED_MARKER)
+        }
+    }
 }

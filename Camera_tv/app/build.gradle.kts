@@ -28,6 +28,7 @@ android {
         buildConfigField("String", "DEV_BASE_URL", "\"${localProps.getProperty("dev.baseUrl", "")}\"")
         buildConfigField("String", "DEV_ACCESS_TOKEN", "\"${localProps.getProperty("dev.accessToken", "")}\"")
         buildConfigField("String", "DEV_REFRESH_TOKEN", "\"${localProps.getProperty("dev.refreshToken", "")}\"")
+        buildConfigField("String", "PAIRING_SERVER_URL", "\"${localProps.getProperty("pairing.serverUrl", "")}\"")
     }
 
     buildTypes {
