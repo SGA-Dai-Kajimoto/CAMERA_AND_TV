@@ -6,7 +6,7 @@ import com.google.gson.annotations.SerializedName
 data class PairingStartResponse(
     @SerializedName("session_id") val sessionId: String,
     @SerializedName("device_secret") val deviceSecret: String,
-    @SerializedName("pairing_url") val pairingUrl: String,
+    @SerializedName("user_code") val userCode: String = "",
     @SerializedName("expires_in") val expiresIn: Long = 0L,
 )
 

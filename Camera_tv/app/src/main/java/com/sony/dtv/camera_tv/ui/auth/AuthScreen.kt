@@ -1,6 +1,5 @@
 package com.sony.dtv.camera_tv.ui.auth
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,21 +19,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sony.dtv.camera_tv.data.local.TokenPreferences
 import com.sony.dtv.camera_tv.data.remote.pairing.PairingApi
-import com.sony.dtv.camera_tv.ui.common.generateQrBitmap
 
 /**
- * QR コード認証画面。
- * スマホでQRを読み取り Creators Cloud にログインすると、トークンがTVへ渡され認証完了する。
+ * 番号ペアリング認証画面。
+ * PC で Creators Cloud にログインし、ブックマークレットでこの番号を入力すると、
+ * トークンがローカルサーバー経由でTVへ渡され認証完了する。
  */
 @Composable
 fun AuthScreen(
@@ -62,8 +59,8 @@ fun AuthScreen(
                 message = state.error!!,
                 onRetry = { viewModel.startPairing() },
             )
-            state.isLoading || state.pairingUrl == null -> AuthLoading()
-            else -> AuthQr(pairingUrl = state.pairingUrl!!)
+            state.isLoading || state.userCode == null -> AuthLoading()
+            else -> AuthCode(userCode = state.userCode!!)
         }
     }
 }
@@ -78,43 +75,41 @@ private fun AuthLoading() {
 }
 
 @Composable
-private fun AuthQr(pairingUrl: String) {
-    val qrBitmap = remember(pairingUrl) { generateQrBitmap(pairingUrl, 720) }
-
+private fun AuthCode(userCode: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(64.dp),
     ) {
-        // QR コード
-        Box(
-            modifier = Modifier.size(320.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (qrBitmap != null) {
-                Image(
-                    bitmap = qrBitmap.asImageBitmap(),
-                    contentDescription = "認証用QRコード",
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Text("QRコードを生成できませんでした", color = MaterialTheme.colorScheme.error)
-            }
+        // 6桁コード
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "確認番号",
+                fontSize = 22.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                formatCode(userCode),
+                fontSize = 88.sp,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
         }
 
         // 手順説明
         Column(
-            modifier = Modifier.width(520.dp),
+            modifier = Modifier.width(560.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(
-                "スマートフォンでログイン",
+                "PC でログインして認証",
                 fontSize = 30.sp,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                "1. スマホのカメラで左のQRコードを読み取る\n" +
-                    "2. 表示されたページで Creators Cloud にログイン\n" +
-                    "3. ログインが完了すると自動的にこの画面が切り替わります",
+                "1. PC のブラウザで Creators Cloud にログイン\n" +
+                    "2. ブックマーク「TVへトークン送信」をクリック\n" +
+                    "3. 左の確認番号を入力する\n" +
+                    "4. 送信されると自動的にこの画面が切り替わります",
                 fontSize = 20.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -123,7 +118,7 @@ private fun AuthQr(pairingUrl: String) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(12.dp))
                 Text(
-                    "ログイン待機中…",
+                    "送信待機中…",
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -131,6 +126,10 @@ private fun AuthQr(pairingUrl: String) {
         }
     }
 }
+
+/** 6桁を "123 456" のように3桁ずつ区切って読みやすくする。 */
+private fun formatCode(code: String): String =
+    if (code.length == 6) "${code.substring(0, 3)} ${code.substring(3)}" else code
 
 @Composable
 private fun AuthError(message: String, onRetry: () -> Unit) {

@@ -14,19 +14,19 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** QR 認証画面の状態。 */
+/** 認証画面の状態。 */
 data class AuthUiState(
     val isLoading: Boolean = true,
-    val pairingUrl: String? = null,
+    val userCode: String? = null,
     val expiresInSec: Long = 0L,
     val isAuthenticated: Boolean = false,
     val error: String? = null,
 )
 
 /**
- * QR 認証のフロー制御。
- *  1. サーバーへ /pairing/start → pairing_url と device_secret を取得
- *  2. pairing_url を QR 化して表示（画面側）
+ * 番号ペアリングのフロー制御。
+ *  1. サーバーへ /pairing/start → 6桁コード(user_code) と device_secret を取得
+ *  2. 6桁コードを画面表示（画面側）
  *  3. /pairing/{sessionId} を一定間隔でポーリング
  *  4. completed でトークンを保存し isAuthenticated=true
  */
@@ -47,11 +47,11 @@ class AuthViewModel(
         _uiState.update { AuthUiState(isLoading = true) }
         viewModelScope.launch {
             try {
-                val start = pairingApi.start(mapOf("device_id" to DEVICE_ID))
+                val start = pairingApi.start()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        pairingUrl = start.pairingUrl,
+                        userCode = start.userCode,
                         expiresInSec = start.expiresIn,
                         error = null,
                     )
@@ -105,7 +105,6 @@ class AuthViewModel(
 
     companion object {
         private const val POLL_INTERVAL_MS = 2500L
-        private const val DEVICE_ID = "camera-tv"
 
         fun factory(
             pairingApi: PairingApi,

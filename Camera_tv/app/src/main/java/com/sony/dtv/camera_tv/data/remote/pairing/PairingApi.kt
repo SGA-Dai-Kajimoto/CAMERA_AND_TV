@@ -1,6 +1,5 @@
 package com.sony.dtv.camera_tv.data.remote.pairing
 
-import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -12,11 +11,9 @@ import retrofit2.http.Path
  */
 interface PairingApi {
 
-    /** ペアリング開始。QR 化する pairing_url と、トークン取得用の device_secret を得る。 */
+    /** ペアリング開始。画面表示用の6桁コードと、トークン取得用の device_secret を得る。 */
     @POST("pairing/start")
-    suspend fun start(
-        @Body body: Map<String, @JvmSuppressWildcards Any>,
-    ): PairingStartResponse
+    suspend fun start(): PairingStartResponse
 
     /**
      * トークン取得ポーリング。
