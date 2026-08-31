@@ -14,15 +14,3 @@ data class Content(
     // API response does not include folder_id; set after fetch
     @Transient val folderId: String = "",
 )
-
-/**
- * tags に含まれる "rating:N"（N=1..5）から評価値を取り出す。
- * 複数ある場合は最大値、未設定なら 0 を返す。
- */
-fun Content.ratingValue(): Int =
-    tags
-        ?.mapNotNull { tag ->
-            if (tag.startsWith("rating:")) tag.substringAfter("rating:").toIntOrNull() else null
-        }
-        ?.maxOrNull()
-        ?: 0

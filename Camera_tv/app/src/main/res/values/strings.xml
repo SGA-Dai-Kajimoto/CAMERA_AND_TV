@@ -1,3 +1,154 @@
 <resources>
     <string name="app_name">Camera_tv</string>
+
+    <!-- 共通 -->
+    <string name="common_loading">読み込み中…</string>
+    <string name="common_retry">再読み込み</string>
+    <string name="common_cancel">キャンセル</string>
+    <string name="common_empty">表示できる写真がありません</string>
+
+    <!-- 写真画面 -->
+    <string name="photo_counter">%1$d / %2$d</string>
+    <!-- キー説明は `キー|説明` を `;` で並べる。KeyHint がキー側だけに地を敷く -->
+    <string name="photo_hint">← →|写真切替;↓・決定|操作メニューを開く</string>
+    <string name="photo_play_hint">決定・戻る|自動再生をやめる</string>
+    <string name="photo_content_description">写真</string>
+
+    <!-- メニュー -->
+    <string name="menu_cull">選別</string>
+    <string name="menu_cull_detail">まだ見ていない写真を1枚ずつ、採用か見送りに振り分けます。</string>
+    <string name="menu_compare">見比べ</string>
+    <string name="menu_cull_review">選別結果</string>
+    <string name="menu_tutorial">使い方</string>
+    <string name="menu_tutorial_detail">操作方法をもう一度最初から見ます。</string>
+    <string name="menu_sign_out">サインアウト</string>
+    <string name="menu_sign_out_detail">このテレビからアカウントを外します。次回は QR での接続からやり直しになります。</string>
+    <string name="menu_date">日付</string>
+    <string name="menu_date_detail">カレンダーから、表示する撮影日を切り替えます。</string>
+    <string name="menu_rating">評価</string>
+    <string name="menu_rating_detail">いま表示している写真に ★ を付けます。PC の現像ソフトにも引き継がれます。</string>
+    <string name="menu_delete">削除</string>
+    <string name="menu_delete_detail">いま表示している写真をクラウドから削除します。取り消せません。</string>
+    <string name="menu_share">共有</string>
+    <string name="menu_share_detail">いま表示している写真の QR コードを出します。スマホで読み取ると保存できます。</string>
+    <string name="menu_sort">並び順</string>
+    <string name="menu_sort_detail">新しい順と、★の高い順を切り替えます。</string>
+    <string name="menu_play">自動再生</string>
+    <string name="menu_play_detail">5秒ごとに自動で写真を送ります。写真以外の表示は消えます。</string>
+    <string name="menu_pause">再生をやめる</string>
+    <string name="menu_hint">↑ ↓|選ぶ;→|サムネイルへ;決定|実行;戻る|閉じる</string>
+    <string name="menu_thumbnail_hint">← →|送り;←|メニューへ;↓|一覧表示;決定|この写真を表示</string>
+
+    <!-- 並び順 -->
+    <string name="sort_title">並び順を選ぶ</string>
+    <string name="sort_date_label">新しい順</string>
+    <string name="sort_date_detail">撮影日が新しい写真から表示します</string>
+    <string name="sort_rating_label">お気に入り順</string>
+    <string name="sort_rating_detail">採用・高評価の写真から表示します</string>
+    <string name="sort_hint">↑ ↓|選択;決定|適用;戻る|キャンセル</string>
+
+    <!-- 見比べ -->
+    <string name="compare_selected_count">選択中 %1$d 枚</string>
+    <string name="compare_layout_stack">重ねて比較</string>
+    <string name="compare_layout_side">並べて比較</string>
+    <string name="compare_hint">← →|移動;決定|選択を切替;CH+|重ねる／並べる;↑|採用;↓|見送り;戻る|終了</string>
+
+    <!-- 選別 -->
+    <string name="cull_progress">%1$d / %2$d</string>
+    <string name="cull_unjudged">未判定 %1$d</string>
+    <string name="cull_pick">採用</string>
+    <string name="cull_skip">見送り</string>
+    <string name="cull_hint">↑|採用;↓|見送り;← →|送り;決定|拡大;CH+|見比べ;CH−|選別結果;戻る|終了</string>
+    <string name="cull_hint_zoomed">← → ↑ ↓|見る位置を移動;決定|倍率変更;戻る|拡大を解除</string>
+    <string name="cull_scope_all">全期間</string>
+    <string name="cull_zoom_badge">拡大 %1$d%%</string>
+    <string name="cull_zoom_content_description">拡大表示の写真</string>
+    <string name="cull_complete_title">未判定の写真はありません</string>
+    <string name="cull_complete_review">結果を見直す</string>
+    <string name="cull_complete_hint">決定|結果を見直す;戻る|終了</string>
+
+    <!-- 選別結果の見直し -->
+    <string name="cull_review_picked">採用 %1$d</string>
+    <string name="cull_review_skipped">見送り %1$d</string>
+    <string name="cull_review_empty">ここに表示する写真はまだありません</string>
+    <string name="cull_review_hint">決定|反対側へ移す;CH−|未判定に戻す;↑|採用／見送りの切替;戻る|選別へ</string>
+    <string name="cull_review_tab_hint">← →|採用／見送りの切替;↓|写真へ;戻る|選別へ</string>
+
+    <!-- 使い方案内（導入カード） -->
+    <string name="tutorial_intro_title">実際の画面で操作を案内します</string>
+    <string name="tutorial_intro_body">画面の右側に「次にやること」が出ます。そのとおりに操作すると次の手順へ進みます。読むだけの説明はありません。あとからメニューの「使い方」でいつでも見直せます。</string>
+    <string name="tutorial_start">案内をはじめる</string>
+    <string name="tutorial_skip">スキップ</string>
+    <string name="tutorial_intro_hint">← →|選ぶ;決定|決定;戻る|スキップ</string>
+
+    <!-- 使い方案内（実画面ガイド） -->
+    <string name="coach_progress">使い方 %1$d / %2$d</string>
+    <string name="coach_finished">案内はここまで</string>
+    <string name="coach_return_photo">この画面では案内できません。戻るキーで写真の画面に戻ってください。</string>
+    <string name="coach_return_cull">この画面では案内できません。選別の画面に戻ってください。</string>
+    <string name="coach_exit_zoom">拡大中の ↑ ↓ は見る位置の移動に使われます。戻るキーで拡大を解除してください。</string>
+
+    <string name="coach_send_title">写真を送ってみましょう</string>
+    <string name="coach_send_body">左右キーで前後の写真に移ります。</string>
+    <string name="coach_send_hint">← →|写真を送る</string>
+
+    <string name="coach_cull_title">選別を始めましょう</string>
+    <string name="coach_cull_body">↓ でメニューを開き、いちばん上の「選別」を決定します。まだ見ていない写真が順に出ます。</string>
+    <string name="coach_cull_hint">↓|メニュー;決定|選別</string>
+
+    <string name="coach_zoom_title">拡大してピントを確かめましょう</string>
+    <string name="coach_zoom_body">決定キーを押すたびに 100% → 200% → 400% → 解除 と変わります。カメラの背面液晶では分からない差が見えます。見終えたら解除してください。</string>
+    <string name="coach_zoom_hint">決定|拡大／解除</string>
+
+    <string name="coach_judge_title">採用か見送りを決めましょう</string>
+    <string name="coach_judge_body">↑ で採用、↓ で見送り。見送っても写真は消えません。自動再生に出なくなるだけです。</string>
+    <string name="coach_judge_hint">↑|採用;↓|見送り</string>
+
+    <string name="coach_done_title">これで一通りです</string>
+    <string name="coach_done_body">あとは同じ操作の繰り返しです。採用した写真が自動再生に流れます。迷ったら送って、あとから選別結果で直せます。</string>
+
+    <!-- トースト -->
+    <string name="toast_sorted_by_date">日付順に並び替えました</string>
+    <string name="toast_sorted_by_rating">評価順に並び替えました</string>
+    <string name="toast_deleted">削除しました</string>
+    <string name="toast_rating_cleared">評価を解除しました</string>
+    <string name="toast_rating_set">★%1$d を設定しました</string>
+    <string name="toast_play_started">自動再生を開始しました</string>
+    <string name="toast_play_stopped">自動再生を停止しました</string>
+
+    <!-- 評価ダイアログ -->
+    <string name="rating_title">お気に入り評価</string>
+    <string name="rating_none">評価なし</string>
+    <string name="rating_value">★ × %1$d</string>
+    <string name="rating_hint">← →|選択（左端 ✕ で評価なし）;決定|確定;戻る|キャンセル</string>
+
+    <!-- 削除確認 -->
+    <string name="delete_title">この写真を削除しますか？</string>
+    <string name="delete_message">削除した写真は元に戻せません。</string>
+    <string name="delete_confirm">削除する</string>
+
+    <!-- サインアウト確認 -->
+    <string name="sign_out_title">サインアウトしますか？</string>
+    <string name="sign_out_message">保存されている認証情報を消して、QR 認証画面に戻ります。</string>
+    <string name="sign_out_confirm">サインアウト</string>
+
+    <!-- 共有 -->
+    <string name="share_title">スマートフォンで読み取ってダウンロード</string>
+    <string name="share_expiry">URL の有効期限は約10分です</string>
+    <string name="share_hint">決定・戻る|閉じる</string>
+    <string name="share_qr_failed">QRコードを生成できませんでした</string>
+    <string name="share_qr_content_description">共有用QRコード</string>
+
+    <!-- 一覧（ギャラリー） -->
+    <string name="gallery_hint">CH+ CH−|サイズ変更;決定|表示;戻る|メニュー</string>
+    <string name="gallery_thumbnail_content_description">サムネイル %1$d</string>
+
+    <!-- 日付選択 -->
+    <string name="date_select_month">%1$d年%2$d月</string>
+    <string name="date_select_legend_has_photo">写真あり</string>
+    <string name="date_select_legend_no_photo">写真なし</string>
+    <string name="date_select_hint">← → ↑ ↓|日付移動;決定|この日を表示;戻る|メニュー</string>
+
+    <!-- エラー -->
+    <string name="error_title">エラーが発生しました</string>
 </resources>

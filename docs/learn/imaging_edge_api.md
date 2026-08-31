@@ -24,6 +24,14 @@
 - リクエストボディに必須: `upload_id`, `kind`, `name`, `bytes`, `utc_offset`。
 - `content_type`（任意）で MIME を明示できる。指定した値が優先される。
 
+### POST /api/v1/folders/{folder_id}/contents/{content_id}:setTags（タグ更新）
+- **`tags` に空配列を渡すと 400 `{"error":{"code":400,"message":"Input validation error."}}` になる。**（2026-08-25 実測 / dev3 / Android TV アプリから）
+- そのため「評価を外す＝タグを全部消す」は表現できない。TV アプリでは評価なしを `rating:0` というタグで表し、配列が空にならないようにしている（`ContentRating.applyTo`）。
+- `rating:0` は `ContentRating.parseTag` が `null` を返すので、読むときは「評価なし」として扱われる。
+- 実測ログ:
+  - 修正前 `tag sync failed cid=c-8579ca6c` → 400
+  - 修正後 `tag sync ok cid=c-8579ca6c tags=[rating:0]` → 再起動後 `judged` が 12→11、選別キューに復帰
+
 ### 対応フォーマット / HEIF
 - HEIF は対応。`GET .../contents/{content_id}/metadata` の `kind` に `image_heif_meta`（HEIF専用メタデータ）が定義されている。`image_raw_meta` / `image_arq_meta` もあり RAW/ARQ も解析対象。
 - アップロード時は `name` の拡張子（例 `.heif` / `.heic`）と `content_type` がサムネイル生成・メタデータ解析の判定に使われる。

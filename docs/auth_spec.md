@@ -174,16 +174,47 @@ curl -X POST https://<host>/api/v1/oauth2/token \
 | 再認証 | Refresh Token 期限切れ時は `GET /api/v1/oauth2/auth` から再ログイン |
 | リトライ猶予 | ネットワーク障害で取得失敗した場合、**60秒以内**に限り同一の古い Refresh Token で1回リトライ可能 |
 
-### 実装上の動作フロー
+## ペアリングサーバーの秘密情報の扱い（2026-08-31 見直し）
 
-```
-起動時
-  ├─ access_token_ttl が現在時刻を過ぎている？
-  │     Yes → refresh_token_ttl を確認
-  │               期限内 → POST /api/v1/oauth2/token でリフレッシュ
-  │               期限切れ → 再ログイン必要（エラー通知）
-  │     No  → そのまま API 呼び出し
-  │
-API 呼び出し中 (401 受信)
-  └─ tryRefreshToken() で再リフレッシュ → 成功なら同リクエストを再試行
-```
+### どこに何が渡るか
+
+トークン交換は **TV 自身**が AccountPF へ直接行う。中継サーバーは `auth_code` を渡すだけ。
+
+| データ | TV | ペアリングサーバー | ブラウザ | AccountPF |
+|---|---|---|---|---|
+| `code_verifier` | 生成・**メモリのみ** | **渡らない** | 渡らない | 交換時に受け取る |
+| `code_challenge` | 生成 | セッションに保持 | URL に含む | 受け取る |
+| `device_code` | 保持 | セッションに保持 | 渡らない | 渡らない |
+| `user_code` | 画面表示 | セッションに保持 | URL に含む | 渡らない |
+| `auth_code` | 受け取る | 中継する（**トークン化はできない**） | URL に含む | 発行 |
+| `access_token` / `refresh_token` | DataStore に保存 | **渡らない** | 渡らない | 発行 |
+
+### 成立している防御
+
+- **PKCE が強制**されているため、`auth_code` を握っても単独ではトークン化できない
+  （実測: `code_verifier` 無しは 401）。これは中継サーバーにも LAN の盗聴者にも当てはまる
+- サーバーはトークンを一切見ない。`auth_code` も返却前に `store.delete()` して単回消費
+- セッションはインメモリ・TTL 300秒・上限 200 件
+- `device_code` は 256bit 乱数、`user_code` は 8 文字 / 20 種（約 2.6×10^10 通り）
+  ＋ 外部 IP の総当たり制限
+
+### 平文 HTTP で盗聴された場合
+
+TV ⇔ 中継サーバーは平文 HTTP（`usesCleartextTraffic="true"`）だが、
+流れるのは `auth_code` / `device_code` / `user_code` まで。
+`code_verifier` が無ければトークンにできず、`code_challenge` から逆算もできない。
+TV ⇔ AccountPF は HTTPS なので、トークンと `code_verifier` は LAN に出ない。
+
+### 残っているリスク
+
+| # | 内容 | 影響 |
+|---|---|---|
+| 1 | `user_code` を TV 画面・サーバーコンソール・logcat に出す | 5 分以内に第三者が先にログインすると、**その第三者のアカウント**が TV に紐づく |
+| 2 | 平文 HTTP で `auth_code` が見える | 単体では使えないが、TV より先に `/device/code` を叩けば認証を妨害できる（DoS） |
+
+### 修正済み
+
+- トークン交換をサーバーから TV へ移した（2026-08-31）。
+  以前は `POST /device/token` でサーバーが交換しており、その瞬間だけ
+  `code_verifier`・`auth_code`・発行トークンを同時に保持していた。
+- `/callback/{state}?error=...` の反射型 XSS（2026-08-31 実測で再現・`html.escape` で修正）。

@@ -1,118 +1,119 @@
 # TASKS
 
-## API疎通の確認
-- [x] `camera/app/check_api.py` 実装済み（`python camera/app/check_api.py` で実行）
-- [x] `camera/api/auth_info.json` にトークンを記入して実際に疎通確認を実施する
-  - トークン取得手順は `docs/auth_spec.md` を参照
-  - 確認済み: user_id=8857511748018, コンテナ1件, フォルダ0件 (2026-05-27)
+Imaging Edge クラウドの写真を Android TV で**選別・鑑賞**するプロジェクトの進捗。
 
-## GUIアプリの実装
-
-- [x] `camera/app/gui_app.py` 実装済み（`python camera/app/gui_app.py` で起動）
-- [x] `camera/app/design/gui_design.md` 設計書作成済み
-- [x] フォルダ一覧・作成・名前変更・削除の動作確認（2026-05-27）
-- [x] コンテンツ一覧・削除の動作確認（2026-05-27）
-- [x] 画像アップロードの動作確認（2026-05-27）
-- [x] 画像表示機能（`GET .../resources/{kind}/binary`）の実装・動作確認（2026-05-27）
+コンセプト: **一眼で撮った大量の写真を、大画面のテレビで「選ぶ」。**
+選んだ写真がそのまま日常のスライドショーになり、評価は現像ワークフローへ引き継げる。
 
 ---
 
-## Android アプリの実装（Camera_PoC）
+## 完了
 
-設計書: `Camera_PoC/docs/android_design.md`
-実装ガイド: `android_app_instructions.md`
+### 認証（PKCE デバイスフロー）
 
-### Phase 1: プロジェクト基盤
-- [x] `Camera_PoC/gradle/libs.versions.toml` に依存ライブラリのバージョンを追加
-      （Compose, Retrofit2, OkHttp3, Coroutines, DataStore, Coil, Navigation Compose）
-- [x] `Camera_PoC/app/build.gradle.kts` を更新
-      （Compose ビルドオプション、kotlin-compose プラグイン、依存ライブラリ追加）
-- [x] `Camera_PoC/app/src/main/AndroidManifest.xml` に `INTERNET` パーミッションと `MainActivity` を追加
-- [x] `MainActivity.kt` 作成（Compose Hello 表示）
-- [x] `ui/theme/` 作成（Color, Type, Theme — ImagingEdgeTheme）
+- [x] AccountPF の `redirect_url` ホワイトリストを実測（2026-08-21 / dev3）
+      → localhost / 127.0.0.1 は任意ポート・任意パスで許可。他ホストは 400
+- [x] PKCE が強制されていることを実測 → `code_verifier` 無しは 401
+- [x] `server/device_flow.py`: PKCE ベースの擬似デバイスフロー
+      （`/device/authorize` `/device` `/callback/{state}` `/device/token`）
+- [x] サーバーは `auth_code` のみ保持。`code_verifier` とトークンは保存しない
+- [x] TV 側 PKCE 実装。`code_verifier` はメモリのみ
+- [x] QR ＋ 確認コードの認証画面
+- [x] サインアウト導線（メニュー →「その他」）
+- [x] `user_code` を 8 文字英字化、総当たりへのレート制限
+- [x] 旧方式（ブックマークレット＋ localStorage）を廃止
+- [x] 実機で通し確認（TV → サーバー → ブラウザログイン → トークン取得）
 
-#### Phase 1 完了チェック
-- [ ] **ビルド成功**: `./gradlew assembleDebug` がエラーなく完了する
-- [ ] **Compose 動作**: `MainActivity` に `setContent { Text("Hello") }` を仮置きしてエミュレーターで起動・表示できる
+### 写真表示
 
----
+- [x] ダウンサンプルの欠損を修正（α1 で画素数 約12.6倍の改善）
+- [x] 要求解像度を実描画サイズ基準に変更
+- [x] `BitmapRegionDecoder` による等倍拡大（100% / 200% / 400%）
+- [x] 拡大位置のミニマップ表示
+- [x] 拡大中の方向キーによる表示位置の移動
+- [x] サムネイルを全体表示（`ContentScale.Fit`）に変更
+- [x] 一覧のフォーカス拡大が隣のセルに干渉する問題を修正
+- [x] 同じ写真の二重取得・取り消しによる無駄を排除
+- [x] OkHttp の同時接続数を調整し、サムネイルが本画像を待たせないように
 
-### Phase 2: データ層
+### 選別
 
-#### Step 2-1: テスト先行作成（実装前に作成）
-- [x] `test/data/repository/ImagingEdgeRepositoryTest.kt` — リポジトリの単体テスト（スケルトン）
-      - `getUserMe()` が JSON をパースして `user_id` を返すこと
-      - `listFolders()` が `removed_date` ありのフォルダを除外すること
-      - `createFolder()` / `renameFolder()` / `deleteFolder()` が正しいエンドポイントに送信すること
-      - `listContents()` / `deleteContent()` が正しく動くこと
-      - 401 レスポンス時に `AuthInterceptor` がトークンをリフレッシュして再試行すること
-- [x] `test/data/local/TokenPreferencesTest.kt` — DataStore の読み書きテスト（スケルトン）
-      - トークンの保存・読み込みが正しく動くこと
-- [ ] テストが **RED（コンパイルエラーまたは失敗）** であることを確認
+- [x] 二値選別（採用 / 見送り）。既存の `rating:N` タグに載せる
+- [x] 見送りは削除しない（評価を下げるだけ）
+- [x] 未判定のみを対象にしたキュー（「続きから」が自動的に成立）
+- [x] 日付を指定した選別（一日分ずつ区切れる）
+- [x] 楽観的更新＋送信キューの直列化
+- [x] 選別結果の見直し画面（採用 / 見送りの行き来、未判定への差し戻し）
+- [x] 見比べ画面（重ねて比較 / 左右に並べて比較）
 
-#### Step 2-2: 実装
-- [x] `data/model/Folder.kt` — フォルダ DTO（`folder_id`, `display_name` など）
-- [x] `data/model/Content.kt` — コンテンツ DTO（`content_id`, `display_name`, `filename` など）
-- [x] `data/remote/ImagingEdgeApi.kt` — Retrofit インターフェース
-      （全エンドポイントを suspend fun で定義）
-- [x] `data/remote/AuthInterceptor.kt` — Bearer トークン付与 OkHttp インターセプター
-      （401 時にリフレッシュして再試行）
-- [x] `data/local/TokenPreferences.kt` — DataStore による access_token / refresh_token 保存
-- [x] `data/repository/ImagingEdgeRepository.kt` — ApiClient 相当のリポジトリ
-      （Retrofit呼び出し → ドメインモデル変換）
+### UI
 
-#### Phase 2 完了チェック
-- [x] **単体テスト全通過**: `./gradlew test` で `ImagingEdgeRepositoryTest` が全件グリーン
-  - `getUserMe()` が JSON をパースして `user_id` を返すこと
-  - `listFolders()` が `removed_date` ありのフォルダを除外すること
-  - `createFolder()` / `renameFolder()` / `deleteFolder()` が正しいエンドポイントに送信すること
-  - `listContents()` / `deleteContent()` が正しく動くこと
-  - 401 レスポンス時に `AuthInterceptor` がトークンをリフレッシュして再試行すること
-- [x] **DataStore 読み書き**: `TokenPreferences` の read/write テスト（`runTest` + `TestCoroutineScheduler`）が通ること
+- [x] メニューを 2 ページ構成に整理
+- [x] ボタンに背景・枠・アイコンを付けて押せると分かるように
+- [x] 並び順を選択式ダイアログに変更
+- [x] 一覧ボタンを削除（メニューから ↓ 2 回で開ける）
+- [x] 初回起動チュートリアル（メニューから再表示可能）
 
----
+### 基盤
 
-### Phase 3: UI 層
-
-#### Step 3-1: テスト先行作成（実装前に作成）
-- [x] `test/ui/main/MainViewModelTest.kt` — ViewModel の単体テスト（スケルトン）
-      - `loadFolders()` 後に `uiState.folders` が更新されること
-      - `createFolder()` 後に `uiState.folders` が再取得されること
-      - `selectFolder()` 後に `uiState.contents` が更新されること
-      - エラー時に `uiState.error` が設定されること
-- [x] テストが **RED（コンパイルエラーまたは失敗）** であることを確認
-
-#### Step 3-2: 実装
-- [x] `ui/theme/` — Compose テーマ設定（Color, Type, Theme）
-- [x] `ui/main/MainViewModel.kt` — フォルダ・コンテンツ操作の状態管理
-      （StateFlow で UiState を公開、Coroutines で非同期実行）
-- [x] `ui/main/MainScreen.kt` — メイン画面 Composable
-      （左ペイン: フォルダリスト＋操作ボタン、右ペイン: コンテンツリスト＋操作ボタン）
-- [x] `ui/main/FolderPanel.kt` — フォルダパネル Composable
-      （新規作成・名前変更・削除ダイアログを含む）
-- [x] `ui/main/ContentPanel.kt` — コンテンツパネル Composable
-      （アップロード・削除ボタン、コンテンツ一覧）
-- [x] `ui/imageviewer/ImageViewerScreen.kt` — 画像ビューア画面 Composable
-      （バイナリダウンロード → Coil で表示）
-- [x] `MainActivity.kt` 更新 — Navigation Compose でルーティング設定
-
-#### Phase 3 完了チェック
-- [x] **ViewModel 単体テスト全通過**: `./gradlew test` で `MainViewModelTest` が全件グリーン
-  - `loadFolders()` 後に `uiState.folders` が更新されること
-  - `createFolder()` 後に `uiState.folders` が再取得されること
-  - `selectFolder()` 後に `uiState.contents` が更新されること
-  - エラー時に `uiState.error` が設定されること
-- [ ] **Compose プレビュー**: `FolderPanel` / `ContentPanel` / `ImageViewerScreen` に `@Preview` アノテーションを付けて Android Studio でプレビュー表示できること
-- [x] **ビルド成功**: `./gradlew assembleDebug` がエラーなく完了する
+- [x] `data` → `domain` → `ui` のレイヤー分離
+- [x] 単体テスト 155 件
 
 ---
 
-### Phase 4: 結合・動作確認（エミュレーター or 実機）
-- [ ] アプリ起動時に `GET /api/v1/user/me` が呼ばれ、ステータスバーにログインユーザーが表示される
-- [ ] フォルダ一覧が表示される
-- [ ] フォルダ作成・名前変更・削除が動作する（操作後にリストが更新される）
-- [ ] フォルダ選択後にコンテンツ一覧が表示される
-- [ ] 画像アップロードが動作する（ファイル選択 → アップロード → コンテンツ一覧に追加される）
-- [ ] コンテンツの「表示」で画像ビューア画面に遷移して画像が表示される
-- [ ] コンテンツ削除が動作する（削除後にリストから消える）
+## 進行中 / 次にやること
 
+### 実機で確認したいこと
+
+- [ ] **UI レイヤーの描画解像度**を実機ログで確認する
+      （`MainActivity` の `display ui=... panel=...`）。食い違う場合は `SurfaceView` 対応が必要
+- [ ] 等倍拡大のレスポンス（`original` 取得＋部分デコードの体感速度）
+- [ ] 選別の送りのテンポ（`thumbnail_1920` プレビューで十分か）
+
+### 選別の強化
+
+- [ ] **連写グルーピング**。`recordedDate` は秒精度があるが、`ContentDate` は日付までしか見ていない
+      → 時刻付きの解決関数を追加し、近接した撮影を 1 グループにまとめる
+- [ ] 拡大位置の自動決定（顔検出 or Exif の AF 測距点）
+- [ ] 見送り済みをまとめて削除する導線
+
+### 鑑賞の強化
+
+- [ ] 待機時のアンビエント再生（TV をつけたら流れている状態）
+- [ ] 「新着」「n 年前の今日」などの自動プレイリスト
+- [ ] トランジション（Ken Burns 効果）
+
+### 認証・運用
+
+- [ ] `redirect_url` のホスト登録を確認する
+      → 通ればスマホで QR を読んで認証できる（ループバック制約が外れる）
+- [ ] `AuthInterceptor` が全リクエストで `runBlocking` して DataStore を読む点の改善
+- [ ] refresh_token 失効時に認証画面へ自動で戻す
+
+---
+
+## 見送った / やらないこと
+
+| 項目 | 理由 |
+|---|---|
+| 撮影から60秒での表示 | アップロードが一括 API 非対応で 1 枚 3 ステップ。技術的に不可能 |
+| イベント当日のリアルタイム表示 | 同上 |
+| カメラ本体の★との同期を差別化の核にする | 背面液晶では選別の判断自体ができない。逆方向（TV → PC）に価値がある |
+| BGM | 著作権対応が重い。優先度を下げる |
+| AI による自動アルバム | Google Photos に勝てない領域 |
+| 写真編集・SNS 投稿・キーワード検索 | スコープ外 |
+
+---
+
+## 関連ドキュメント
+
+| 文書 | 内容 |
+|---|---|
+| `docs/api_spec_summary.md` | API エンドポイントとリクエスト仕様 |
+| `docs/auth_spec.md` | 認証・トークン TTL の仕様 |
+| `docs/learn/imaging_edge_api.md` | API のはまりポイントと教訓 |
+| `docs/tv_screen_design.md` | TV の画面設計 |
+| `docs/content_date_grouping_design.md` | 日付グルーピングの設計 |
+| `.github/skills/tv-device-auth/` | 認証の運用とトラブルシュート |
+| `.github/skills/accountpf-api-probe/` | API の実測手順と実測済みの制約 |
+| `.github/skills/tv-image-rendering/` | 写真表示・デコードの設計ルール |

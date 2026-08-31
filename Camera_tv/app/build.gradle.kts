@@ -51,6 +51,10 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        // android.util.Log などの android.jar スタブを例外ではなく既定値で返す
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
