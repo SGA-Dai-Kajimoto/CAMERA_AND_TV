@@ -43,7 +43,7 @@ RAW_EXTENSIONS = {".arw", ".arq", ".dng", ".raw"}
 
 def load_auth() -> dict:
     if not AUTH_FILE.exists():
-        print(f"{AUTH_FILE} がありません。docs/auth_spec.md を参照してトークンを用意してください。")
+        print(f"{AUTH_FILE} がありません。docs/auth/spec.md を参照してトークンを用意してください。")
         sys.exit(1)
     return json.loads(AUTH_FILE.read_text(encoding="utf-8"))
 
@@ -67,7 +67,7 @@ def refresh_token(auth: dict) -> dict:
         print("  ・ python server/device_flow.py を起動して")
         print("    python server/test_device_flow.py e2e でログインし、得られたトークンを")
         print(f"    {AUTH_FILE} に記入する")
-        print("  ・ docs/auth_spec.md の手順で手動取得する")
+        print("  ・ docs/auth/spec.md の手順で手動取得する")
         sys.exit(1)
 
     data = res.json()

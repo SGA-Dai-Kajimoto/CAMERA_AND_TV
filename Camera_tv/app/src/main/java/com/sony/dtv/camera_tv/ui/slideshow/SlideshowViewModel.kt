@@ -73,6 +73,8 @@ data class SlideshowUiState(
     val compareSelected: Set<String> = emptySet(),
     val compareLayout: CompareLayout = CompareLayout.Stack,
     val compareImages: Map<String, ByteArray> = emptyMap(),
+    /** 見比べを拡大するときの原寸バイト列。ピント確認は縮小画像では意味が無い。 */
+    val compareZoomImages: Map<String, ByteArray> = emptyMap(),
     val error: String? = null,
 
     /** 作業を中断させない軽い知らせ（トースト表示）。 */
@@ -169,6 +171,7 @@ class SlideshowViewModel(
     private var imageLoadJob: Job? = null
     private var zoomLoadJob: Job? = null
     private var compareLoadJob: Job? = null
+    private var compareZoomLoadJob: Job? = null
     private var tagSyncJob: Job? = null
     private var loadedContentId: String? = null
 
@@ -458,9 +461,18 @@ class SlideshowViewModel(
     /**
      * 拡大を 解除 → 等倍 → 200% → 400% → 解除 と循環させる。
      * リモコンでは割り当てられるキーが少ないため、1 キーで完結させる。
+     *
+     * 見比べ中は選んだ写真すべてに同じ倍率・同じ位置を適用する。位置は元画像に対する
+     * 割合で持っているので、連写どうしなら同じ被写体の同じ個所が並ぶ。
      */
     fun cycleZoom() {
         val state = _uiState.value
+        if (state.isComparing) {
+            val next = (state.zoomStep + 1) % ZOOM_MAGNIFICATIONS.size
+            _uiState.update { it.copy(zoomStep = next) }
+            if (next > 0) loadCompareZoomImages()
+            return
+        }
         if (state.cullContent == null) return
         val next = (state.zoomStep + 1) % ZOOM_MAGNIFICATIONS.size
         // 倍率を変えるたび中央に戻すと見ていた場所を見失うので、位置は保持する
@@ -512,18 +524,23 @@ class SlideshowViewModel(
                 // 開いた写真は最初から選ばれている方が自然
                 compareSelected = setOfNotNull(current?.contentId),
                 compareImages = emptyMap(),
+                compareZoomImages = emptyMap(),
             )
         }
         loadCompareImages(listOfNotNull(current))
+        // 選別で拡大したまま入ってきたときは、その倍率・位置のまま見比べられるようにする
+        if (_uiState.value.isZoomed) loadCompareZoomImages()
     }
 
     fun exitCompare() {
         compareLoadJob?.cancel()
+        compareZoomLoadJob?.cancel()
         _uiState.update {
             it.copy(
                 compareContents = emptyList(),
                 compareSelected = emptySet(),
                 compareImages = emptyMap(),
+                compareZoomImages = emptyMap(),
             )
         }
     }
@@ -549,6 +566,7 @@ class SlideshowViewModel(
             it.copy(compareSelected = selected)
         }
         loadCompareImages(_uiState.value.comparePicked)
+        if (_uiState.value.isZoomed) loadCompareZoomImages()
     }
 
     fun toggleCompareLayout() {
@@ -585,6 +603,46 @@ class SlideshowViewModel(
                 } ?: return@forEach
                 _uiState.update { it.copy(compareImages = it.compareImages + (content.contentId to bytes)) }
             }
+        }
+    }
+
+    /**
+     * 見比べを拡大するための原寸を集める。
+     *
+     * 原寸は 1 枚で数十 MB あるので、チェックしている写真の分だけ持ち、
+     * 外れたものは捨てる。切り出しは [com.sony.dtv.camera_tv.ui.common.decodeCenterRegion]
+     * が表示範囲だけ行うので、保持するのはバイト列だけで済む。
+     */
+    private fun loadCompareZoomImages() {
+        val targets = _uiState.value.comparePicked
+        compareZoomLoadJob?.cancel()
+        compareZoomLoadJob = scope.launch {
+            val keep = targets.map { it.contentId }.toSet()
+            _uiState.update { state ->
+                state.copy(compareZoomImages = state.compareZoomImages.filterKeys { it in keep })
+            }
+            val missing = targets.filter { it.contentId !in _uiState.value.compareZoomImages }
+            if (missing.isEmpty()) return@launch
+
+            _uiState.update { it.copy(isZoomLoading = true) }
+            missing.forEach { content ->
+                repository.getContentBinary(content.folderId, content.contentId)
+                    .onSuccess { bytes ->
+                        Log.i(TAG, "compare zoom source cid=${content.contentId} bytes=${bytes.size}")
+                        _uiState.update {
+                            it.copy(
+                                compareZoomImages =
+                                    it.compareZoomImages + (content.contentId to bytes),
+                            )
+                        }
+                    }
+                    .onFailure { e ->
+                        // 1 枚落ちても他は見比べられるので、全画面エラーにはしない
+                        Log.w(TAG, "compare zoom source failed cid=${content.contentId}", e)
+                        _uiState.update { it.copy(notice = "原寸画像の読み込みに失敗しました") }
+                    }
+            }
+            _uiState.update { it.copy(isZoomLoading = false) }
         }
     }
 
@@ -823,6 +881,7 @@ class SlideshowViewModel(
         super.onCleared()
         cancelAutoAdvance()
         zoomLoadJob?.cancel()
+        compareZoomLoadJob?.cancel()
     }
 
     companion object {

@@ -48,7 +48,7 @@ class AuthInterceptor(
 
     /**
      * refresh_token を使って access_token を更新する。
-     * APIドキュメント仕様（docs/auth_spec.md）:
+    * APIドキュメント仕様（docs/auth/spec.md）:
      * - refresh_token_ttl が切れていた場合は null を返す（再ログイン必要）
      * - 使用した refresh_token は無効になるため、レスポンスの新しいトークンを必ず保存する
      * @return 新しい access_token。失敗時は null。

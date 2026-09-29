@@ -6,7 +6,7 @@ Imaging Edge フォルダマネージャー GUI アプリ
 
 事前準備:
     camera/api/auth_info.json に access_token / refresh_token を記入すること。
-    取得方法は docs/auth_spec.md を参照。
+    取得方法は docs/auth/spec.md を参照。
 
 設計:
     camera/app/design/gui_design.md

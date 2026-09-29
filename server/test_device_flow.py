@@ -5,7 +5,7 @@ device_flow.py の疎通確認。ブラウザでのログインが要る部分�
 
 確認する内容:
   1. POST /device/authorize が device_code / user_code / QR用URL を返す
-  2. 認可前の POST /device/token が authorization_pending を返す
+  2. 認可前の POST /device/code が authorization_pending を返す
   3. 連打すると slow_down になる
   4. GET /device?user_code=... が AccountPF へ 302 し、TV の code_challenge を引き継ぐ
   5. 未知の device_code が access_denied になる

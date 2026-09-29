@@ -17,7 +17,7 @@ def load_auth() -> dict:
     if not AUTH_FILE.exists():
         raise FileNotFoundError(
             f"認証情報ファイルが見つかりません: {AUTH_FILE}\n"
-            "camera/api/auth_info.json にトークンを記入してください（docs/auth_spec.md 参照）"
+            "camera/api/auth_info.json にトークンを記入してください（docs/auth/spec.md 参照）"
         )
     with open(AUTH_FILE, encoding="utf-8") as f:
         return json.load(f)

@@ -607,6 +607,56 @@ class SlideshowViewModelTest {
 
         assertFalse(vm.uiState.value.isComparing)
         assertTrue(vm.uiState.value.compareImages.isEmpty())
+        assertTrue(vm.uiState.value.compareZoomImages.isEmpty())
+    }
+
+    @Test
+    fun `見比べの拡大は選んだ全枚の原寸を取りに行く`() = runTest(dispatcher) {
+        val vm = createCullViewModel()
+        vm.startCulling()
+        vm.startCompare()
+        val first = vm.uiState.value.compareContent!!.contentId
+        vm.compareMoveBy(1)
+        val second = vm.uiState.value.compareContent!!.contentId
+        vm.toggleCompareSelection()
+
+        vm.cycleZoom()
+
+        assertTrue(vm.uiState.value.isZoomed)
+        assertEquals(setOf(first, second), vm.uiState.value.compareZoomImages.keys)
+        coVerify { repository.getContentBinary("f1", second, "original") }
+    }
+
+    @Test
+    fun `見比べの拡大位置は全枚で共有される`() = runTest(dispatcher) {
+        val vm = createCullViewModel()
+        vm.startCulling()
+        vm.startCompare()
+        vm.cycleZoom()
+
+        vm.panZoom(1, 0)
+
+        // 位置は元画像に対する割合なので、1 つ持てば全枚の「同じ個所」を指せる
+        val state = vm.uiState.value
+        assertEquals(0.5f + SlideshowViewModel.PAN_STEP_RATIO, state.zoomCenterX, 0.0001f)
+        assertEquals(0.5f, state.zoomCenterY, 0f)
+    }
+
+    @Test
+    fun `見比べで外した写真の原寸は持ち続けない`() = runTest(dispatcher) {
+        val vm = createCullViewModel()
+        vm.startCulling()
+        vm.startCompare()
+        val first = vm.uiState.value.compareContent!!.contentId
+        vm.compareMoveBy(1)
+        vm.toggleCompareSelection()
+        vm.cycleZoom()
+        assertEquals(2, vm.uiState.value.compareZoomImages.size)
+
+        // いま見ている 2 枚目のチェックを外す
+        vm.toggleCompareSelection()
+
+        assertEquals(setOf(first), vm.uiState.value.compareZoomImages.keys)
     }
 
     // ---------------------------------------------------------------- //

@@ -23,6 +23,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -31,7 +35,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.sony.dtv.camera_tv.R
@@ -41,8 +47,11 @@ import com.sony.dtv.camera_tv.ui.common.KeyHint
 import com.sony.dtv.camera_tv.ui.common.InfoChip
 import com.sony.dtv.camera_tv.ui.common.KeyInputSurface
 import com.sony.dtv.camera_tv.ui.common.ThumbnailCell
+import com.sony.dtv.camera_tv.ui.common.ZoomMinimap
+import com.sony.dtv.camera_tv.ui.common.ZoomedRegion
 import com.sony.dtv.camera_tv.ui.common.rememberFullscreenReqPx
 import com.sony.dtv.camera_tv.ui.common.rememberSampledBitmap
+import com.sony.dtv.camera_tv.ui.common.rememberZoomedRegion
 import com.sony.dtv.camera_tv.ui.theme.TvColors
 import com.sony.dtv.camera_tv.ui.theme.TvDimens
 import com.sony.dtv.camera_tv.ui.theme.TvTextSizes
@@ -60,6 +69,9 @@ private val CHECK_BADGE_SIZE = 30.dp
  *
  * 人間は「並置した差」より「同じ場所での変化」の検出が得意なので、既定は重ね。
  * どちらが向くかは写真次第なので、選びながらいつでも切り替えられるようにしている。
+ *
+ * 拡大は選別画面と同じ仕組み（[rememberZoomedRegion]）を使い、倍率と位置を
+ * 全枚に同時適用する。連写のピントを見比べるのが主な用途。
  */
 @Composable
 internal fun CompareScreen(
@@ -74,6 +86,8 @@ internal fun CompareScreen(
     }
 
     val stripState = rememberLazyListState()
+    // ミニマップは 1 つだけ出す。全枚同じ位置を見ているので代表 1 枚で足りる
+    var minimapRegion by remember { mutableStateOf<ZoomedRegion?>(null) }
     LaunchedEffect(candidates) { actions.loadThumbnails(candidates) }
     LaunchedEffect(uiState.compareIndex) {
         stripState.animateScrollToItem(uiState.compareIndex.coerceIn(0, candidates.lastIndex))
@@ -82,23 +96,39 @@ internal fun CompareScreen(
     KeyInputSurface(
         modifier = Modifier.background(TvColors.Background),
         onKey = { key ->
-            when (key) {
-                Key.DirectionLeft -> { actions.compareMoveBy(-1); true }
-                Key.DirectionRight -> { actions.compareMoveBy(1); true }
-                Key.Enter, Key.DirectionCenter -> { actions.toggleCompareSelection(); true }
-                Key.ChannelUp, Key.ChannelDown -> { actions.toggleCompareLayout(); true }
-                Key.DirectionUp -> { actions.comparePick(); true }
-                Key.DirectionDown -> { actions.compareSkip(); true }
-                Key.Back -> { onExit(); true }
-                else -> false
+            // 拡大中は方向キーを全枚共通の「見る位置」の移動に使う。
+            // 候補送りや採用・見送りは拡大を解除してから行う。
+            if (uiState.isZoomed) {
+                when (key) {
+                    Key.DirectionLeft -> { actions.panZoom(-1, 0); true }
+                    Key.DirectionRight -> { actions.panZoom(1, 0); true }
+                    Key.DirectionUp -> { actions.panZoom(0, -1); true }
+                    Key.DirectionDown -> { actions.panZoom(0, 1); true }
+                    Key.Enter, Key.DirectionCenter, Key.ChannelDown -> { actions.cycleZoom(); true }
+                    Key.ChannelUp -> { actions.toggleCompareLayout(); true }
+                    Key.Back -> { actions.zoomOff(); true }
+                    else -> false
+                }
+            } else {
+                when (key) {
+                    Key.DirectionLeft -> { actions.compareMoveBy(-1); true }
+                    Key.DirectionRight -> { actions.compareMoveBy(1); true }
+                    Key.Enter, Key.DirectionCenter -> { actions.toggleCompareSelection(); true }
+                    Key.ChannelUp -> { actions.toggleCompareLayout(); true }
+                    Key.ChannelDown -> { actions.cycleZoom(); true }
+                    Key.DirectionUp -> { actions.comparePick(); true }
+                    Key.DirectionDown -> { actions.compareSkip(); true }
+                    Key.Back -> { onExit(); true }
+                    else -> false
+                }
             }
         },
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (uiState.compareLayout) {
-                    CompareLayout.Stack -> StackedCompare(uiState)
-                    CompareLayout.SideBySide -> SideBySideCompare(uiState)
+                    CompareLayout.Stack -> StackedCompare(uiState) { minimapRegion = it }
+                    CompareLayout.SideBySide -> SideBySideCompare(uiState) { minimapRegion = it }
                 }
 
                 Row(
@@ -115,15 +145,35 @@ internal fun CompareScreen(
                         ),
                         color = TvColors.Pick,
                     )
-                    InfoChip(
-                        text = stringResource(
-                            if (uiState.compareLayout == CompareLayout.Stack) {
-                                R.string.compare_layout_stack
-                            } else {
-                                R.string.compare_layout_side
-                            },
-                        ),
-                        color = TvColors.Star,
+                    Row(horizontalArrangement = Arrangement.spacedBy(TvDimens.SpaceSm)) {
+                        if (uiState.isZoomed) {
+                            InfoChip(
+                                text = stringResource(
+                                    R.string.cull_zoom_badge,
+                                    (uiState.zoomMagnification * 100).toInt(),
+                                ),
+                                color = TvColors.Star,
+                            )
+                        }
+                        InfoChip(
+                            text = stringResource(
+                                if (uiState.compareLayout == CompareLayout.Stack) {
+                                    R.string.compare_layout_stack
+                                } else {
+                                    R.string.compare_layout_side
+                                },
+                            ),
+                            color = TvColors.Star,
+                        )
+                    }
+                }
+
+                minimapRegion?.takeIf { uiState.isZoomed }?.let { region ->
+                    ZoomMinimap(
+                        region = region,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(TvDimens.SpaceLg),
                     )
                 }
             }
@@ -178,7 +228,9 @@ private fun CandidateStrip(
             }
         }
         KeyHint(
-            text = stringResource(R.string.compare_hint),
+            text = stringResource(
+                if (uiState.isZoomed) R.string.compare_hint_zoomed else R.string.compare_hint,
+            ),
             modifier = Modifier.align(Alignment.CenterHorizontally),
         )
     }
@@ -205,16 +257,18 @@ private fun CheckBadge(modifier: Modifier = Modifier) {
  * こうすると位置がずれている部分だけが二重ににじんで見える。
  */
 @Composable
-private fun StackedCompare(uiState: SlideshowUiState) {
+private fun StackedCompare(uiState: SlideshowUiState, onRegion: (ZoomedRegion?) -> Unit) {
     val picked = uiState.comparePicked
 
     Box(modifier = Modifier.fillMaxSize()) {
         picked.forEachIndexed { index, content ->
             CompareImage(
-                bytes = uiState.compareImages[content.contentId],
+                content = content,
+                uiState = uiState,
                 isFocused = false,
                 showBorder = false,
                 alpha = 1f / (index + 1),
+                onRegion = if (index == 0) onRegion else null,
             )
         }
         uiState.compareContent?.let { focused ->
@@ -229,12 +283,12 @@ private fun StackedCompare(uiState: SlideshowUiState) {
 
 /** 並べ表示。チェックした枚数だけ横に並べる。 */
 @Composable
-private fun SideBySideCompare(uiState: SlideshowUiState) {
+private fun SideBySideCompare(uiState: SlideshowUiState, onRegion: (ZoomedRegion?) -> Unit) {
     Row(
         modifier = Modifier.fillMaxSize().padding(TvDimens.SpaceMd),
         horizontalArrangement = Arrangement.spacedBy(TvDimens.SpaceSm),
     ) {
-        uiState.comparePicked.forEach { content ->
+        uiState.comparePicked.forEachIndexed { index, content ->
             val isFocused = content.contentId == uiState.compareContent?.contentId
             Column(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -243,9 +297,11 @@ private fun SideBySideCompare(uiState: SlideshowUiState) {
             ) {
                 Box(modifier = Modifier.weight(1f)) {
                     CompareImage(
-                        bytes = uiState.compareImages[content.contentId],
+                        content = content,
+                        uiState = uiState,
                         isFocused = isFocused,
                         showBorder = true,
+                        onRegion = if (index == 0) onRegion else null,
                     )
                 }
                 CompareCaption(content = content, isFocused = isFocused)
@@ -254,18 +310,39 @@ private fun SideBySideCompare(uiState: SlideshowUiState) {
     }
 }
 
+/**
+ * 見比べ 1 枚分の描画。
+ *
+ * 拡大中は選別画面と同じように原寸から必要な矩形だけを切り出す。切り出し位置は
+ * 元画像全体に対する割合なので、画素数が同じ連写なら全枚で同じ個所が並ぶ。
+ * ビューポートは並べ表示では 1 枚分の幅になるので、ここで実寸を測って渡す。
+ */
 @Composable
 private fun CompareImage(
-    bytes: ByteArray?,
+    content: Content,
+    uiState: SlideshowUiState,
     isFocused: Boolean,
     showBorder: Boolean,
     alpha: Float = 1f,
+    onRegion: ((ZoomedRegion?) -> Unit)? = null,
 ) {
     val reqPx = rememberFullscreenReqPx()
-    val bitmap = rememberSampledBitmap(bytes, reqPx)
+    val bitmap = rememberSampledBitmap(uiState.compareImages[content.contentId], reqPx)
+    var viewport by remember { mutableStateOf(IntSize.Zero) }
+    val zoomed = rememberZoomedRegion(
+        bytes = uiState.compareZoomImages[content.contentId].takeIf { uiState.isZoomed },
+        viewportWidth = viewport.width,
+        viewportHeight = viewport.height,
+        magnification = uiState.zoomMagnification,
+        centerX = uiState.zoomCenterX,
+        centerY = uiState.zoomCenterY,
+    )
+    LaunchedEffect(zoomed) { onRegion?.invoke(zoomed) }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .onSizeChanged { viewport = it }
             .then(
                 if (showBorder) {
                     Modifier.border(
@@ -278,10 +355,17 @@ private fun CompareImage(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        if (bitmap != null) {
+        val shown = if (uiState.isZoomed) zoomed?.bitmap else bitmap
+        if (shown != null) {
             Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = stringResource(R.string.photo_content_description),
+                bitmap = shown.asImageBitmap(),
+                contentDescription = stringResource(
+                    if (uiState.isZoomed) {
+                        R.string.cull_zoom_content_description
+                    } else {
+                        R.string.photo_content_description
+                    },
+                ),
                 contentScale = ContentScale.Fit,
                 alpha = alpha,
                 modifier = Modifier.fillMaxSize(),

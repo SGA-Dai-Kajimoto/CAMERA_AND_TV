@@ -6,7 +6,7 @@ Imaging Edge API 疎通確認スクリプト (CUI)
 
 事前準備:
     camera/api/auth_info.json に access_token / refresh_token を記入すること。
-    取得方法は docs/auth_spec.md を参照。
+    取得方法は docs/auth/spec.md を参照。
 
 モジュール構成:
     camera/app/design/module_design.md を参照。
@@ -71,7 +71,7 @@ def main() -> None:
 
     if not client.auth.get("access_token") and not client.auth.get("refresh_token"):
         print("[ERROR] auth_info.json にトークンが設定されていません。")
-        print("  docs/auth_spec.md を参照してトークンを取得・記入してください。")
+        print("  docs/auth/spec.md を参照してトークンを取得・記入してください。")
         sys.exit(1)
 
     try:

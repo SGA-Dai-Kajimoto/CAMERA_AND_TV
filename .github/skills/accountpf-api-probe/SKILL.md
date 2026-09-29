@@ -77,5 +77,5 @@ python server/probe_oauth.py pkce-exchange <auth_code> [none|wrong|ok|ok-camel]
 1. **ログイン不要で分かることから潰す。** 認可エンドポイントは 302 / 400 で多くを判別できる
 2. `auth_code` は使い切りなので、**1 ログインにつき 1 ケース**に絞る
 3. トークンは全文を出力しない（`probe_oauth.py` は先頭12文字だけ出す）
-4. 分かったことは `docs/api_spec_summary.md` に、はまりどころは
+4. 分かったことは `docs/api/api_spec_summary.md` に、はまりどころは
    `docs/learn/imaging_edge_api.md` に**測定日と条件つきで**追記する

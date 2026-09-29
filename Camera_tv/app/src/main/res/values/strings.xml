@@ -7,6 +7,16 @@
     <string name="common_cancel">キャンセル</string>
     <string name="common_empty">表示できる写真がありません</string>
 
+    <!-- クラウドへの取り込み案内（TV で動画再生 ＋ QR でスマートフォンへ） -->
+    <string name="cloud_upload_title">写真はカメラからクラウドへ</string>
+    <string name="cloud_upload_body">このアプリはクラウド上の写真を表示します。設定手順は「TVで動画を見る」から再生できます。手順を手元に置きたいときは QR コードをスマートフォンで読み取ってください（ソニー サポート）。</string>
+    <string name="cloud_upload_qr_description">クラウドアップロード設定の説明ページの QR コード</string>
+    <string name="cloud_upload_qr_failed">QR コードを生成できませんでした</string>
+    <string name="cloud_upload_watch">TVで動画を見る</string>
+    <string name="help_video_hint">決定|再生／一時停止;← →|10秒 戻す／送る;戻る|閉じる</string>
+    <string name="help_video_unavailable">この TV ではアプリ内で動画を再生できません。YouTube アプリも開けない場合は、QR コードをスマートフォンで読み取ってご覧ください。</string>
+    <string name="empty_hint">← →|選ぶ;決定|実行</string>
+
     <!-- 写真画面 -->
     <string name="photo_counter">%1$d / %2$d</string>
     <!-- キー説明は `キー|説明` を `;` で並べる。KeyHint がキー側だけに地を敷く -->
@@ -51,7 +61,8 @@
     <string name="compare_selected_count">選択中 %1$d 枚</string>
     <string name="compare_layout_stack">重ねて比較</string>
     <string name="compare_layout_side">並べて比較</string>
-    <string name="compare_hint">← →|移動;決定|選択を切替;CH+|重ねる／並べる;↑|採用;↓|見送り;戻る|終了</string>
+    <string name="compare_hint">← →|移動;決定|選択を切替;CH+|重ねる／並べる;CH−|拡大;↑|採用;↓|見送り;戻る|終了</string>
+    <string name="compare_hint_zoomed">← → ↑ ↓|全枚の見る位置を移動;決定|倍率変更;CH+|重ねる／並べる;戻る|拡大を解除</string>
 
     <!-- 選別 -->
     <string name="cull_progress">%1$d / %2$d</string>

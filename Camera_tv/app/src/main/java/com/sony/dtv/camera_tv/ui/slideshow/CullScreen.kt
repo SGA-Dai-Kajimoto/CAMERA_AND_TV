@@ -2,18 +2,15 @@ package com.sony.dtv.camera_tv.ui.slideshow
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,19 +20,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
 import com.sony.dtv.camera_tv.R
 import com.sony.dtv.camera_tv.domain.ContentCulling
 import com.sony.dtv.camera_tv.domain.ContentRating
@@ -44,18 +34,15 @@ import com.sony.dtv.camera_tv.ui.common.KeyHint
 import com.sony.dtv.camera_tv.ui.common.InfoChip
 import com.sony.dtv.camera_tv.ui.common.KeyInputSurface
 import com.sony.dtv.camera_tv.ui.common.TvActionButton
+import com.sony.dtv.camera_tv.ui.common.ZoomMinimap
 import com.sony.dtv.camera_tv.ui.common.ZoomedRegion
 import com.sony.dtv.camera_tv.ui.common.rememberFullscreenReqPx
 import com.sony.dtv.camera_tv.ui.common.rememberSampledBitmap
 import com.sony.dtv.camera_tv.ui.common.rememberZoomedRegion
 import com.sony.dtv.camera_tv.ui.theme.TvColors
 import com.sony.dtv.camera_tv.ui.theme.TvDimens
-import com.sony.dtv.camera_tv.ui.theme.TvShapes
 import com.sony.dtv.camera_tv.ui.theme.TvTextSizes
 import java.time.format.DateTimeFormatter
-
-/** ミニマップの幅。全体像のどこを見ているかが分かればよいので小さくてよい。 */
-private val MINIMAP_WIDTH = 200.dp
 
 private val CULL_DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("M/d (E)")
 
@@ -257,37 +244,7 @@ private fun ZoomedImage(zoomed: ZoomedRegion?, isLoading: Boolean) {
     }
 }
 
-/** 全体像のどこを拡大しているかを示すミニマップ。 */
-@Composable
-private fun ZoomMinimap(region: ZoomedRegion, modifier: Modifier = Modifier) {
-    val aspect = region.sourceWidth.toFloat() / region.sourceHeight
-    Box(
-        modifier = modifier
-            .width(MINIMAP_WIDTH)
-            .aspectRatio(aspect)
-            .clip(TvShapes.Small)
-            .background(TvColors.Scrim),
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawRect(color = TvColors.OnSurfaceDisabled, style = Stroke(width = 2f))
-            drawRect(
-                color = TvColors.Star,
-                topLeft = Offset(
-                    region.visibleLeftRatio * size.width,
-                    region.visibleTopRatio * size.height,
-                ),
-                size = Size(
-                    region.visibleWidthRatio * size.width,
-                    region.visibleHeightRatio * size.height,
-                ),
-                style = Stroke(width = 3f),
-            )
-        }
-    }
-}
-
-/** 未判定を捌ききったときの完了表示。 */
-@Composable
+/** 未判定を捌ききったときの完了表示。 */@Composable
 private fun CullCompleteScreen(
     pickedCount: Int,
     skippedCount: Int,

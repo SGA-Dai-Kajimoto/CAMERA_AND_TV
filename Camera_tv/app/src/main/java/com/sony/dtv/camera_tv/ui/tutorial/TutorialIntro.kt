@@ -1,5 +1,6 @@
 package com.sony.dtv.camera_tv.ui.tutorial
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.sony.dtv.camera_tv.R
+import com.sony.dtv.camera_tv.ui.common.CLOUD_UPLOAD_VIDEO_ID
+import com.sony.dtv.camera_tv.ui.common.CloudUploadGuide
+import com.sony.dtv.camera_tv.ui.common.HelpVideoOverlay
 import com.sony.dtv.camera_tv.ui.common.KeyHint
 import com.sony.dtv.camera_tv.ui.common.KeyInputSurface
 import com.sony.dtv.camera_tv.ui.common.TvActionButton
@@ -31,6 +35,13 @@ import com.sony.dtv.camera_tv.ui.theme.TvShapes
 import com.sony.dtv.camera_tv.ui.theme.TvTextSizes
 
 private val CARD_WIDTH = 780.dp
+
+/** 導入カードの選択肢。並び順と左右キーの順を一致させるために列挙で持つ。 */
+private enum class Choice(@StringRes val labelRes: Int) {
+    Start(R.string.tutorial_start),
+    Watch(R.string.cloud_upload_watch),
+    Skip(R.string.tutorial_skip),
+}
 
 /**
  * 案内を受けるかどうかを最初に選んでもらうカード。
@@ -43,16 +54,34 @@ fun TutorialIntro(
     onStart: () -> Unit,
     onSkip: () -> Unit,
 ) {
-    var skipSelected by remember { mutableStateOf(false) }
+    var selected by remember { mutableStateOf(0) }
+    var showVideo by remember { mutableStateOf(false) }
+
+    // KeyInputSurface を 2 つ同時に出すとフォーカスを奪い合うので、再生中はカードを描かない
+    if (showVideo) {
+        HelpVideoOverlay(
+            videoId = CLOUD_UPLOAD_VIDEO_ID,
+            onClose = { showVideo = false },
+        )
+        return
+    }
 
     KeyInputSurface(
         modifier = Modifier.background(TvColors.ScrimStrong),
         onKey = { key ->
             when (key) {
-                Key.DirectionLeft -> { skipSelected = false; true }
-                Key.DirectionRight -> { skipSelected = true; true }
+                Key.DirectionLeft -> { selected = (selected - 1).coerceAtLeast(0); true }
+                Key.DirectionRight -> {
+                    selected = (selected + 1).coerceAtMost(Choice.entries.lastIndex); true
+                }
+
                 Key.Enter, Key.DirectionCenter -> {
-                    if (skipSelected) onSkip() else onStart()
+                    when (Choice.entries[selected]) {
+                        Choice.Start -> onStart()
+                        // 動画を閉じたらカードへ戻る。案内はまだ始めていない
+                        Choice.Watch -> showVideo = true
+                        Choice.Skip -> onSkip()
+                    }
                     true
                 }
 
@@ -87,15 +116,18 @@ fun TutorialIntro(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            CloudUploadGuide(
+                modifier = Modifier.fillMaxWidth(),
+                compact = true,
+            )
+
             Row(horizontalArrangement = Arrangement.spacedBy(TvDimens.SpaceMd)) {
-                TvActionButton(
-                    label = stringResource(R.string.tutorial_start),
-                    isFocused = !skipSelected,
-                )
-                TvActionButton(
-                    label = stringResource(R.string.tutorial_skip),
-                    isFocused = skipSelected,
-                )
+                Choice.entries.forEachIndexed { index, choice ->
+                    TvActionButton(
+                        label = stringResource(choice.labelRes),
+                        isFocused = index == selected,
+                    )
+                }
             }
 
             KeyHint(

@@ -4,8 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,12 +24,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.sony.dtv.camera_tv.R
 import com.sony.dtv.camera_tv.data.local.UiPreferences
 import com.sony.dtv.camera_tv.data.repository.ImagingEdgeRepository
 import com.sony.dtv.camera_tv.domain.SortMode
 import com.sony.dtv.camera_tv.domain.isJudged
+import com.sony.dtv.camera_tv.ui.common.CLOUD_UPLOAD_VIDEO_ID
+import com.sony.dtv.camera_tv.ui.common.CloudUploadGuide
+import com.sony.dtv.camera_tv.ui.common.HelpVideoOverlay
+import com.sony.dtv.camera_tv.ui.common.KeyHint
 import com.sony.dtv.camera_tv.ui.common.KeyInputSurface
 import com.sony.dtv.camera_tv.ui.common.TvActionButton
 import com.sony.dtv.camera_tv.ui.theme.TvColors
@@ -40,6 +48,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private const val TOAST_DURATION_MS = 2000L
+
+/** 空状態に出す取り込み案内の幅。本文が 1 行に伸びきらない程度に抑える。 */
+private val EMPTY_GUIDE_WIDTH = 720.dp
 
 /** 使い方案内の段階。 */
 private enum class TutorialPhase { None, Intro, Coach }
@@ -219,10 +230,7 @@ internal fun SlideshowContent(
                 onRetry = actions.reload,
             )
 
-            !uiState.hasContents -> RetryableState(
-                title = stringResource(R.string.common_empty),
-                onRetry = actions.reload,
-            )
+            !uiState.hasContents -> EmptyState(onRetry = actions.reload)
 
             else -> when (screenMode) {
                 ScreenMode.Photo -> PhotoScreen(
@@ -434,6 +442,60 @@ private fun RetryableState(
         ) {
             StatusMessage(title = title, detail = detail)
             TvActionButton(label = stringResource(R.string.common_retry))
+        }
+    }
+}
+
+/**
+ * 写真が 1 枚も無いとき。原因はクラウドへの取り込みが未設定なことが多いので、
+ * 再読み込みだけでなく設定手順への導線を出す。
+ */
+@Composable
+private fun EmptyState(onRetry: () -> Unit) {
+    var watchSelected by remember { mutableStateOf(false) }
+    var showVideo by remember { mutableStateOf(false) }
+
+    // KeyInputSurface を 2 つ同時に出すとフォーカスを奪い合うので、再生中はこちらを描かない
+    if (showVideo) {
+        HelpVideoOverlay(
+            videoId = CLOUD_UPLOAD_VIDEO_ID,
+            onClose = { showVideo = false },
+        )
+        return
+    }
+
+    KeyInputSurface(
+        onKey = { key ->
+            when (key) {
+                Key.DirectionLeft -> { watchSelected = false; true }
+                Key.DirectionRight -> { watchSelected = true; true }
+                Key.Enter, Key.DirectionCenter -> {
+                    if (watchSelected) showVideo = true else onRetry()
+                    true
+                }
+
+                else -> false
+            }
+        },
+    ) {
+        Column(
+            modifier = Modifier.align(Alignment.Center).width(EMPTY_GUIDE_WIDTH),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(TvDimens.SpaceMd),
+        ) {
+            StatusMessage(title = stringResource(R.string.common_empty))
+            CloudUploadGuide(modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(TvDimens.SpaceMd)) {
+                TvActionButton(
+                    label = stringResource(R.string.common_retry),
+                    isFocused = !watchSelected,
+                )
+                TvActionButton(
+                    label = stringResource(R.string.cloud_upload_watch),
+                    isFocused = watchSelected,
+                )
+            }
+            KeyHint(text = stringResource(R.string.empty_hint))
         }
     }
 }

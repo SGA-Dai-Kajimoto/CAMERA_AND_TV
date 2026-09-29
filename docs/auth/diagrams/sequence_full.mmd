@@ -1,0 +1,48 @@
+sequenceDiagram
+    participant TV as TVアプリ
+    participant SV as 中継サーバー
+    participant BR as PCブラウザ<br/>同一PC
+    participant PF as AccountPF
+
+    rect rgb(232, 241, 255)
+        Note over TV: 1. TVだけがPKCEの秘密を持つ
+        TV->>TV: code_verifier生成<br/>code_challenge算出
+        Note over TV: code_verifierはメモリのみ
+    end
+
+    TV->>SV: POST /device/authorize<br/>code_challenge / S256 / device_id
+    SV->>SV: device_code / user_code / state生成
+    SV-->>TV: device_code / user_code / QR URL / interval
+    TV->>TV: QR と確認コードを表示
+
+    loop ログイン完了まで
+        TV->>SV: POST /device/code<br/>device_code
+        SV-->>TV: 400 authorization_pending
+    end
+
+    rect rgb(237, 247, 237)
+        Note over BR,PF: 2. PCブラウザでSonyアカウントへログイン
+        BR->>SV: GET /device?user_code=...
+        SV-->>BR: 302 AccountPF認可URL<br/>code_challenge / redirect_url
+        BR->>PF: Sonyアカウントでログイン・同意
+        PF-->>BR: 302 /callback/{state}?auth_code=...
+        BR->>SV: GET /callback/{state}?auth_code=...
+        SV->>SV: auth_codeだけ一時保存
+        SV-->>BR: テレビに戻ってください
+    end
+
+    rect rgb(255, 243, 214)
+        Note over TV,SV: 3. TVは認可コードだけ受け取る
+        TV->>SV: POST /device/code<br/>device_code
+        SV-->>TV: 200 {auth_code, base_url, app_type}
+        SV->>SV: セッション削除（単回消費）
+    end
+
+    rect rgb(255, 231, 231)
+        Note over TV,PF: 4. トークン交換はTVとAccountPFのHTTPSで完結
+        TV->>PF: POST /oauth2/token<br/>app_type / auth_code / code_verifier
+        PF-->>TV: access_token / refresh_token / TTL
+        TV->>TV: token_prefs DataStore に保存
+    end
+
+    Note over SV: 中継サーバーは code_verifier と<br/>access_token / refresh_token を見ない

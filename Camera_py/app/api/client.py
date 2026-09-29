@@ -26,7 +26,7 @@ class ApiClient:
             if self._is_refresh_token_expired():
                 raise RuntimeError(
                     "refresh_token の有効期限が切れています。\n"
-                    "docs/auth_spec.md の Step 1〜3 を参照して再ログインしてください。"
+                    "docs/auth/spec.md の Step 1〜3 を参照して再ログインしてください。"
                 )
             self.refresh_token()
 
@@ -75,14 +75,14 @@ class ApiClient:
     def refresh_token(self) -> None:
         """refresh_token を使って access_token を更新し、ファイルに保存する。
         
-        APIドキュメント仕様（docs/auth_spec.md）:
+        APIドキュメント仕様（docs/auth/spec.md）:
         - refresh_token_ttl が切れていた場合は ValueError を送出する
         - 使用した refresh_token は無効になるため、レスポンスの新しいトークンを必ず保存する
         """
         if self._is_refresh_token_expired():
             raise ValueError(
                 "refresh_token の有効期限が切れています。再ログインが必要です。\n"
-                "docs/auth_spec.md の Step 1〜3 を参照してください。"
+                "docs/auth/spec.md の Step 1〜3 を参照してください。"
             )
         resp = requests.post(
             f"{self._base_url()}/api/v1/oauth2/token",

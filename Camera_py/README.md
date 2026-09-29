@@ -60,7 +60,7 @@
 
 ## Imaging Edge API 仕様まとめ
 
-詳細なエンドポイントやパラメータ例は `../docs/api_spec_summary.md` を参照してください。
+詳細なエンドポイントやパラメータ例は `../docs/api/api_spec_summary.md` を参照してください。
 
 ### 主なカテゴリ
 - OAuth2認証（サインイン・トークン発行・サインアウト）

@@ -21,11 +21,11 @@ Imaging Edge クラウドの写真を Android TV で**選別・鑑賞**するた
 
 | 状況 | 更新先 |
 |---|---|
-| タスクの進捗が変わった | `docs/TASKS.md` |
-| API の仕様が新たに判明した | `docs/api_spec_summary.md` |
+| タスクの進捗が変わった | `docs/project/TASKS.md` |
+| API の仕様が新たに判明した | `docs/api/api_spec_summary.md` |
 | API のはまりポイント・教訓を得た | `docs/learn/imaging_edge_api.md` |
-| 認証の仕様・制約が変わった | `docs/auth_spec.md` |
-| 画面設計を変えた | `docs/tv_screen_design.md` |
+| 認証の仕様・制約が変わった | `docs/auth/spec.md` / `docs/auth/flow.md` |
+| 画面設計を変えた | `docs/design/tv_screen_design.md` |
 
 `docs/log/YYYY-MM-DD.md` への作業ログは任意。まとまった検証をしたときだけ `Did / Got / Next` 形式で残す。
 

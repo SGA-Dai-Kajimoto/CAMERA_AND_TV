@@ -1,5 +1,8 @@
 # 認証情報 JSON 仕様書
 
+> TV のペアリング認証がどう動くかは [flow.md](flow.md) を参照。
+> こちらはトークンの JSON 形式と AccountPF の API 仕様を扱う。
+
 ## ファイル配置
 
 ```
@@ -39,10 +42,15 @@ camera/api/auth_info.json   ← 実際のトークン（git管理外）
 
 ---
 
-## アクセストークンの取得手順
+## アクセストークンの取得手順（旧手動手順）
+
+> 現在の TV アプリはこの手動手順ではなく、[flow.md](flow.md) の
+> PKCE 擬似デバイスフローで認証する。以下は PC 検証用の旧手順として残す。
+> 2026-08-21 の実測以降、認可コード交換には `code_verifier` が必須。
 
 アクセストークンは OAuth2 認可コードフローで取得します。  
-現時点では手動取得が必要です。
+手動で検証する場合は、先に PKCE の `code_verifier` / `code_challenge` を生成し、
+認可URLへ `code_challenge` を付ける必要があります。
 
 ### Step 1: 認可URLを開く
 
@@ -60,12 +68,12 @@ https://ws.dev.imagingedge.sony.net/api/v1/oauth2/auth
 
 ### Step 2: 認可コードを取得する
 
-ログイン後、リダイレクト先URLの `code=` パラメータを取り出す。
+ログイン後、リダイレクト先URLの `auth_code=` パラメータを取り出す。
 
 ```
-https://ws.dev.imagingedge.sony.net/?code=XXXXXX&...
-                                           ^^^^^^
-                                           これが auth_code
+https://ws.dev.imagingedge.sony.net/?auth_code=XXXXXX&...
+                                                ^^^^^^
+                                                これが auth_code
 ```
 
 ### Step 3: アクセストークンに交換する
@@ -75,7 +83,8 @@ curl -X POST https://ws.dev.imagingedge.sony.net/api/v1/oauth2/token \
   -H "Content-Type: application/json" \
   -d '{
     "app_type": "_trial_",
-    "auth_code": "<Step2で取得したcode>"
+    "auth_code": "<Step2で取得したauth_code>",
+    "code_verifier": "<Step1で生成したcode_verifier>"
   }'
 ```
 

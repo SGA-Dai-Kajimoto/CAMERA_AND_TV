@@ -1,0 +1,31 @@
+flowchart LR
+    subgraph LanHttp[信頼できるLAN内のHTTP区間]
+        TV[TVアプリ]
+        SV[中継サーバー]
+    end
+
+    subgraph PcLocal[同一PC内]
+        BR[PCブラウザ]
+    end
+
+    subgraph Sony[AccountPF HTTPS]
+        PF[AccountPF]
+    end
+
+    TV -->|公開値: code_challenge| SV
+    SV -->|短時間コード: user_code / device_code| TV
+    TV -->|device_code でポーリング| SV
+    BR -->|user_code| SV
+    SV -->|code_challenge + redirect_url| PF
+    PF -->|auth_code| SV
+    SV -->|auth_code / base_url / app_type| TV
+    TV ==>|秘密値: code_verifier| PF
+    PF ==>|秘密値: access_token / refresh_token| TV
+
+    classDef public fill:#e8f1ff,stroke:#4084ff,stroke-width:1px,color:#111;
+    classDef relay fill:#fff3d6,stroke:#e67e22,stroke-width:1px,color:#111;
+    classDef secret fill:#ffe7e7,stroke:#d04,stroke-width:2px,color:#111;
+    class TV secret;
+    class SV relay;
+    class BR public;
+    class PF secret;

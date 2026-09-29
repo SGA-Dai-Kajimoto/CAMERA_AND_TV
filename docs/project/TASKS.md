@@ -15,8 +15,10 @@ Imaging Edge クラウドの写真を Android TV で**選別・鑑賞**するプ
       → localhost / 127.0.0.1 は任意ポート・任意パスで許可。他ホストは 400
 - [x] PKCE が強制されていることを実測 → `code_verifier` 無しは 401
 - [x] `server/device_flow.py`: PKCE ベースの擬似デバイスフロー
-      （`/device/authorize` `/device` `/callback/{state}` `/device/token`）
+      （`/device/authorize` `/device` `/callback/{state}` `/device/code`）
 - [x] サーバーは `auth_code` のみ保持。`code_verifier` とトークンは保存しない
+- [x] トークン交換をサーバーから TV へ移設（2026-08-31）。
+      TV が AccountPF を直接叩くため、サーバーはトークンを一度も見ない
 - [x] TV 側 PKCE 実装。`code_verifier` はメモリのみ
 - [x] QR ＋ 確認コードの認証画面
 - [x] サインアウト導線（メニュー →「その他」）
@@ -109,11 +111,12 @@ Imaging Edge クラウドの写真を Android TV で**選別・鑑賞**するプ
 
 | 文書 | 内容 |
 |---|---|
-| `docs/api_spec_summary.md` | API エンドポイントとリクエスト仕様 |
-| `docs/auth_spec.md` | 認証・トークン TTL の仕様 |
+| `docs/api/api_spec_summary.md` | API エンドポイントとリクエスト仕様 |
+| `docs/auth/spec.md` | 認証・トークン TTL の仕様 |
+| `docs/auth/flow.md` | TV ペアリング認証のフローと安全性 |
 | `docs/learn/imaging_edge_api.md` | API のはまりポイントと教訓 |
-| `docs/tv_screen_design.md` | TV の画面設計 |
-| `docs/content_date_grouping_design.md` | 日付グルーピングの設計 |
+| `docs/design/tv_screen_design.md` | TV の画面設計 |
+| `docs/design/content_date_grouping_design.md` | 日付グルーピングの設計 |
 | `.github/skills/tv-device-auth/` | 認証の運用とトラブルシュート |
 | `.github/skills/accountpf-api-probe/` | API の実測手順と実測済みの制約 |
 | `.github/skills/tv-image-rendering/` | 写真表示・デコードの設計ルール |

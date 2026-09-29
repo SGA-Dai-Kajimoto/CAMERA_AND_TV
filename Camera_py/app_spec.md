@@ -73,7 +73,7 @@
 | コンテンツ一覧取得 | `GET /api/v1/folders/{folder_id}/contents` |
 | コンテンツダウンロード | `GET /api/v1/folders/{folder_id}/contents/{content_id}/resources/{kind}/binary` |
 
-詳細は `../docs/api_spec_summary.md` を参照。
+詳細は `../docs/api/api_spec_summary.md` を参照。
 
 ---
 
