@@ -1,0 +1,85 @@
+<mxfile host="app.diagrams.net" modified="2026-09-10T00:00:00.000Z" agent="GitHub Copilot" version="24.7.17">
+  <diagram id="auth-sequence" name="認証シーケンス">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="Camera TV 認証シーケンス（PKCE 擬似デバイスフロー）" style="text;html=1;strokeColor=none;fillColor=none;fontSize=28;fontStyle=1;fontFamily=Yu Gothic;align=left;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="40" y="30" width="850" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="note" value="赤い矢印は秘密値。code_verifier と token は中継サーバーを通らず、TV と AccountPF の HTTPS 通信だけで扱う。" style="text;html=1;strokeColor=none;fillColor=none;fontSize=16;fontFamily=Yu Gothic;align=left;verticalAlign=middle;fontColor=#555555;" vertex="1" parent="1">
+          <mxGeometry x="40" y="82" width="1120" height="32" as="geometry" />
+        </mxCell>
+        <mxCell id="tv" value="TVアプリ" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#4084ff;fontSize=18;fontStyle=1;fontFamily=Yu Gothic;" vertex="1" parent="1">
+          <mxGeometry x="80" y="150" width="210" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="sv" value="中継サーバー" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#e67e22;fontSize=18;fontStyle=1;fontFamily=Yu Gothic;" vertex="1" parent="1">
+          <mxGeometry x="430" y="150" width="230" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="br" value="PCブラウザ&lt;br&gt;同一PC" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#1c9c61;fontSize=18;fontStyle=1;fontFamily=Yu Gothic;" vertex="1" parent="1">
+          <mxGeometry x="800" y="150" width="210" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="pf" value="AccountPF" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#d04;fontSize=18;fontStyle=1;fontFamily=Yu Gothic;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="150" width="210" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="tv-line" value="" style="endArrow=none;html=1;rounded=0;dashed=1;strokeColor=#777777;" edge="1" parent="1" source="tv">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="185" y="880" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="sv-line" value="" style="endArrow=none;html=1;rounded=0;dashed=1;strokeColor=#777777;" edge="1" parent="1" source="sv">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="545" y="880" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="br-line" value="" style="endArrow=none;html=1;rounded=0;dashed=1;strokeColor=#777777;" edge="1" parent="1" source="br">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="905" y="880" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="pf-line" value="" style="endArrow=none;html=1;rounded=0;dashed=1;strokeColor=#777777;" edge="1" parent="1" source="pf">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1255" y="880" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="phase1" value="1. TVが開始" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#eef4ff;strokeColor=#4084ff;fontSize=16;fontStyle=1;fontFamily=Yu Gothic;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="235" width="1360" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="self1" value="code_verifier生成&lt;br&gt;code_challenge算出" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4084ff;fontSize=13;fontFamily=Yu Gothic;" vertex="1" parent="1">
+          <mxGeometry x="68" y="294" width="235" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="POST /device/authorize&lt;br&gt;code_challenge" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#4084ff;fontSize=13;fontFamily=Yu Gothic;" edge="1" parent="1" source="self1" target="sv">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="300" y="330" as="sourcePoint" /><mxPoint x="430" y="330" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="self2" value="device_code / user_code / state を生成&lt;br&gt;セッション保存" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e67e22;fontSize=13;fontFamily=Yu Gothic;" vertex="1" parent="1">
+          <mxGeometry x="410" y="374" width="270" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="device_code / user_code / QR URL" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#e67e22;fontSize=13;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="430" y="462" as="sourcePoint" /><mxPoint x="290" y="462" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="self3" value="QR と確認コードを表示&lt;br&gt;/device/code をポーリング" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#4084ff;fontSize=13;fontFamily=Yu Gothic;" vertex="1" parent="1">
+          <mxGeometry x="68" y="492" width="235" height="58" as="geometry" />
+        </mxCell>
+        <mxCell id="phase2" value="2. PCブラウザでログイン" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#edf7ed;strokeColor=#1c9c61;fontSize=16;fontStyle=1;fontFamily=Yu Gothic;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="585" width="1360" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="GET /device?user_code=..." style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#1c9c61;fontSize=13;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="800" y="655" as="sourcePoint" /><mxPoint x="660" y="655" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m4" value="302 AccountPF認可URL&lt;br&gt;code_challenge + redirect_url" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#e67e22;fontSize=13;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="660" y="705" as="sourcePoint" /><mxPoint x="1150" y="705" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m5" value="/callback/{state}?auth_code=..." style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#d04;fontSize=13;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1150" y="755" as="sourcePoint" /><mxPoint x="660" y="755" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m6" value="テレビに戻ってください" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#1c9c61;fontSize=13;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="660" y="805" as="sourcePoint" /><mxPoint x="800" y="805" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="phase3" value="3. TVが直接トークン交換" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffecec;strokeColor=#d04;fontSize=16;fontStyle=1;fontFamily=Yu Gothic;align=left;spacingLeft=12;" vertex="1" parent="1">
+          <mxGeometry x="40" y="895" width="1360" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="m7" value="/device/code → auth_code" style="endArrow=block;html=1;rounded=0;strokeWidth=2;strokeColor=#e67e22;fontSize=13;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="545" y="840" as="sourcePoint" /><mxPoint x="185" y="840" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m8" value="auth_code + code_verifier" style="endArrow=block;html=1;rounded=0;strokeWidth=3;strokeColor=#d04;fontSize=13;fontStyle=1;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="185" y="945" as="sourcePoint" /><mxPoint x="1255" y="945" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="m9" value="access_token / refresh_token" style="endArrow=block;html=1;rounded=0;strokeWidth=3;strokeColor=#d04;fontSize=13;fontStyle=1;fontFamily=Yu Gothic;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="1255" y="980" as="sourcePoint" /><mxPoint x="185" y="980" as="targetPoint" /></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

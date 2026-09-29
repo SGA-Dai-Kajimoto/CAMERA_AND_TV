@@ -12,11 +12,27 @@
         android:name="android.hardware.touchscreen"
         android:required="false" />
 
+    <!--
+        targetSdk 30+ ではパッケージ可視性が制限され、宣言しないと resolveActivity が
+        常に null を返す。解説動画を TV の YouTube アプリで開けるかの判定に必要。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="vnd.youtube" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.CameraTV">
 
         <activity

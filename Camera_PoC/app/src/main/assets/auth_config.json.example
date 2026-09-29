@@ -1,6 +1,0 @@
-{
-  "base_url": "https://ws.dev.imagingedge.sony.net",
-  "app_type": "_trial_",
-  "access_token": "YOUR_ACCESS_TOKEN_HERE",
-  "refresh_token": "YOUR_REFRESH_TOKEN_HERE"
-}

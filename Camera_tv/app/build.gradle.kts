@@ -4,6 +4,14 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+import java.util.Properties
+
+// local.properties から dev トークンを読み込む
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use(::load)
+}
+
 android {
     namespace = "com.sony.dtv.camera_tv"
     compileSdk = 36
@@ -16,6 +24,11 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "DEV_BASE_URL", "\"${localProps.getProperty("dev.baseUrl", "")}\"")
+        buildConfigField("String", "DEV_ACCESS_TOKEN", "\"${localProps.getProperty("dev.accessToken", "")}\"")
+        buildConfigField("String", "DEV_REFRESH_TOKEN", "\"${localProps.getProperty("dev.refreshToken", "")}\"")
+        buildConfigField("String", "PAIRING_SERVER_URL", "\"${localProps.getProperty("pairing.serverUrl", "")}\"")
     }
 
     buildTypes {
@@ -36,6 +49,11 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+    testOptions {
+        // android.util.Log などの android.jar スタブを例外ではなく既定値で返す
+        unitTests.isReturnDefaultValues = true
     }
 }
 
@@ -57,6 +75,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.datastore.preferences)
     implementation(libs.coil.compose)
+    implementation(libs.zxing.core)
 
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
